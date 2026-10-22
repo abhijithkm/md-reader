@@ -4,7 +4,9 @@ All notable changes to MD Reader are recorded in this file. The format follows [
 
 ## [Unreleased]
 
-Everything below is the first release, 1.0.0. When it is tagged, this heading becomes `## [1.0.0] - YYYY-MM-DD` and a new empty `## [Unreleased]` section goes above it (see [docs/RELEASING.md](docs/RELEASING.md)).
+## [1.0.0] - 2026-10-22
+
+The first release.
 
 ### Added
 
@@ -19,3 +21,6 @@ Everything below is the first release, 1.0.0. When it is tagged, this heading be
 - Protection against files made to hang or crash the window: documents that nest quotes or lists absurdly deep are shown as plain text, very long code lines are not syntax-highlighted, the chunking of long documents runs in linear time, and a part of a document that cannot be drawn is replaced by a message while the rest is shown.
 - Automated checks: unit and integration tests, end-to-end tests that drive the real application (also run against the packaged and the installed application), tests of the installer configuration and of the release scripts and workflows, and a contrast check of both themes.
 - GitHub Actions: CI on Windows for every push and pull request, and a release workflow that builds, tests, installs and uninstalls the installer, writes `SHA256SUMS.txt` and publishes a GitHub Release when a `v*` tag is pushed.
+
+[Unreleased]: https://github.com/abhijithkm/md-reader/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/abhijithkm/md-reader/releases/tag/v1.0.0
