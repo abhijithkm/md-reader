@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build output
+/out/
+/dist/
+/release/
+*.tsbuildinfo
+
+# Test output
+/coverage/
+/e2e/.tmp/
+/test-results/
+/playwright-report/
+
+# Logs and caches
+*.log
+npm-debug.log*
+.vite/
+.eslintcache
+.cache/
+
+# Environment files and signing material - never commit these
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.snk
+
+# Local-only settings
+*.local.json
+.claude/settings.local.json
+.claude/worktrees/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.suo
+*.user

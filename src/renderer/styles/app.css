@@ -1,0 +1,369 @@
+/* Layout: toolbar, optional notice, content, status bar. */
+
+/* A column rather than a grid, so the optional notice bar can come and go without shifting rows. */
+.app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--surface-document);
+}
+
+.toolbar,
+.notice,
+.statusbar {
+  flex: none;
+}
+
+/* ---- Toolbar ---------------------------------------------------------- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--toolbar-height);
+  padding: 0 12px;
+  background: var(--surface-app);
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--border-strong);
+}
+
+.zoom-value {
+  min-width: 48px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* ---- Buttons ---------------------------------------------------------- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--surface-hover);
+}
+
+.button:active {
+  background: var(--surface-active);
+}
+
+.button-primary {
+  height: 36px;
+  padding: 0 20px;
+  border-color: var(--accent-solid);
+  background: var(--accent-solid);
+  color: var(--on-accent-solid);
+  font-weight: 600;
+}
+
+.button-primary:hover {
+  background: var(--accent-solid-hover);
+  border-color: var(--accent-solid-hover);
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.icon-button:active:not(:disabled) {
+  background: var(--surface-active);
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- Notice ------------------------------------------------------------ */
+
+/* Shown instead of the whole interface if it fails to draw (see components/CrashNotice.tsx). */
+.crash {
+  max-width: 34rem;
+  margin: 18vh auto 0;
+  padding: 0 24px;
+}
+
+.crash h1 {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+}
+
+.crash p {
+  margin: 0 0 20px;
+  color: var(--text-muted);
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notice-message {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice-error {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger-text);
+}
+
+.notice-info {
+  background: var(--info-bg);
+  border-color: var(--info-border);
+  color: var(--info-text);
+}
+
+.notice .icon-button {
+  color: inherit;
+}
+
+.notice .icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+/* ---- Content ----------------------------------------------------------- */
+
+.app-main {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.document-scroll {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--surface-document);
+  scroll-behavior: smooth;
+}
+
+.document-scroll:focus-visible {
+  outline-offset: -2px;
+}
+
+.document {
+  zoom: var(--doc-zoom, 1);
+  max-width: calc(var(--measure) + 2 * var(--gutter));
+  margin: 0 auto;
+  padding: 40px var(--gutter) 96px;
+}
+
+/* ---- Empty state ------------------------------------------------------- */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  height: 100%;
+  padding: 32px 24px;
+  overflow-y: auto;
+  text-align: center;
+  background: var(--surface-document);
+}
+
+/* Auto margins centre the content but never push it out of reach in a short window. */
+.empty-state > :first-child {
+  margin-top: auto;
+}
+
+.empty-state > :last-child {
+  margin-bottom: auto;
+}
+
+.empty-state h1 {
+  margin: 8px 0 0;
+  font: 600 26px/1.25 var(--font-display);
+}
+
+.empty-lead {
+  max-width: 30rem;
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 15px;
+  text-wrap: balance;
+}
+
+.shortcut-list {
+  display: grid;
+  gap: 6px;
+  margin: 20px 0 0;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 11.5rem 1fr;
+  align-items: center;
+  gap: 16px;
+}
+
+.shortcut-row dt {
+  text-align: right;
+}
+
+.shortcut-row dd {
+  margin: 0;
+}
+
+.empty-default {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 34rem;
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.empty-default h2 {
+  margin: 0;
+  font: 600 14px/1.3 var(--font-display);
+}
+
+.empty-default p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* ---- Status bar -------------------------------------------------------- */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  height: var(--statusbar-height);
+  padding: 0 14px;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+  background: var(--surface-app);
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.statusbar-item + .statusbar-item::before {
+  content: '\00b7';
+  margin: 0 8px;
+}
+
+.statusbar-name {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+/* ---- Drag and drop ----------------------------------------------------- */
+
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  margin: 8px;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-document) 86%, transparent);
+  pointer-events: none;
+}
+
+.drop-overlay-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font: 600 18px/1.3 var(--font-display);
+}
+
+/* ---- Narrow windows ---------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .toolbar {
+    gap: 8px;
+    padding: 0 8px;
+  }
+
+  .button-label {
+    display: none;
+  }
+
+  .button {
+    padding: 0 8px;
+  }
+
+  .document {
+    --gutter: 20px;
+    padding-top: 24px;
+  }
+
+  .shortcut-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    text-align: center;
+  }
+
+  .shortcut-row dt {
+    text-align: center;
+  }
+}
+
+@media (max-width: 560px) {
+  .toolbar-divider {
+    display: none;
+  }
+}

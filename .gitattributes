@@ -1,0 +1,9 @@
+# Normalize line endings so formatting checks behave the same on every machine.
+* text=auto eol=lf
+
+*.ico binary
+*.png binary
+*.jpg binary
+*.bmp binary
+*.exe binary
+*.woff2 binary

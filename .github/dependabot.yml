@@ -1,0 +1,10 @@
+# The workflows pin every action to a commit SHA, which Dependabot keeps up to date
+# by opening a pull request (the version stays in a comment next to the SHA).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci

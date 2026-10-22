@@ -1,0 +1,70 @@
+appId: io.github.abhijithkm.mdreader
+productName: MD Reader
+executableName: MDReader
+copyright: Copyright (c) 2026 Abhijith KM
+
+directories:
+  output: release
+  buildResources: build
+
+# The app is compiled into out/ and has no runtime dependencies to bundle.
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+asar: true
+npmRebuild: false
+# Only the English locale ships; the interface is English and spell checking is off.
+electronLanguages:
+  - en-US
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  requestedExecutionLevel: asInvoker
+
+# Windows file associations. `name` becomes the ProgID that is registered for the
+# extension, and build/installer.nsh lists the same IDs under Settings > Default apps.
+fileAssociations:
+  - ext: md
+    name: MDReader.md
+    description: Markdown Document
+    icon: file-icon.ico
+    role: Viewer
+  - ext: markdown
+    name: MDReader.markdown
+    description: Markdown Document
+    icon: file-icon.ico
+    role: Viewer
+
+nsis:
+  oneClick: true
+  perMachine: false
+  runAfterFinish: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: MD Reader
+  uninstallDisplayName: MD Reader
+  deleteAppDataOnUninstall: false
+  artifactName: MDReader-Setup-${version}.exe
+  include: build/installer.nsh
+
+portable:
+  artifactName: MDReader-Portable-${version}.exe
+
+# Hardening applied to the packaged executable (see docs/ARCHITECTURE.md).
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+
+# Releases are published by .github/workflows/release.yml, never by electron-builder.
+publish: null
