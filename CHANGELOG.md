@@ -4,6 +4,8 @@ All notable changes to MD Reader are recorded in this file. The format follows [
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-26
+
 ### Added
 
 - Tabs. Every file opens in a tab of its own, in one window (up to 30; another is refused with a message that says to close one). A file that is already open is shown in its tab instead of a second one. Switch with a click or `Ctrl+Tab` / `Ctrl+Shift+Tab` (also `Ctrl+Page Down` / `Page Up`), close with the cross, the middle button, `Delete` on a focused tab or `Ctrl+W`, move a tab by dragging it or with `Ctrl+Shift+Page Up` / `Page Down`, and open a link in a tab of its own with `Ctrl` + click or the middle button. Each tab has its own Back history and keeps the place the reader was at. The Open dialog takes several files, and every Markdown file in a drop opens. A second launch, a double-click in Explorer and Open with each add a tab, in the order they were asked for, and the newest request takes the screen. Tabs that share a file name show the folder as well.
@@ -51,5 +53,6 @@ The first release.
 - Automated checks: unit and integration tests, end-to-end tests that drive the real application (also run against the packaged and the installed application), tests of the installer configuration and of the release scripts and workflows, and a contrast check of both themes.
 - GitHub Actions: CI on Windows for every push and pull request, and a release workflow that builds, tests, installs and uninstalls the installer, writes `SHA256SUMS.txt` and publishes a GitHub Release when a `v*` tag is pushed.
 
-[Unreleased]: https://github.com/abhijithkm/md-reader/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/abhijithkm/md-reader/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/abhijithkm/md-reader/releases/tag/v1.1.0
 [1.0.0]: https://github.com/abhijithkm/md-reader/releases/tag/v1.0.0

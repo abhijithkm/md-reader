@@ -1,7 +1,7 @@
 {
   "name": "md-reader",
   "productName": "MD Reader",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "A lightweight, offline Markdown reader for Windows.",
   "author": {
