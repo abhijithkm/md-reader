@@ -17,6 +17,8 @@ export interface SettingsController {
   setAutomaticUpdates: (enabled: boolean) => void;
   /** Remembers that the one-time explanation of updates was read; `turnOff` also switches them off. */
   dismissUpdateNotice: (turnOff: boolean) => void;
+  /** Whether the tabs that are open come back the next time the app starts. */
+  setRestoreTabs: (enabled: boolean) => void;
 }
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
@@ -118,6 +120,13 @@ export function useSettings(
     [update],
   );
 
+  const setRestoreTabs = useCallback(
+    (enabled: boolean): void => {
+      update({ restoreTabs: enabled });
+    },
+    [update],
+  );
+
   return {
     loaded,
     settings,
@@ -128,5 +137,6 @@ export function useSettings(
     resetZoom,
     setAutomaticUpdates,
     dismissUpdateNotice,
+    setRestoreTabs,
   };
 }

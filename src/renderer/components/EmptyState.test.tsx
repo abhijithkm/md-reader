@@ -7,7 +7,8 @@ describe('EmptyState', () => {
   it('tells the reader what to do', () => {
     render(<EmptyState onOpen={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'Open a Markdown file' })).toBeInTheDocument();
-    expect(screen.getByText(/drag a \.md or \.markdown file/i)).toBeInTheDocument();
+    expect(screen.getByText(/drag \.md or \.markdown files/i)).toBeInTheDocument();
+    expect(screen.getByText(/each file opens in a tab of its own/i)).toBeInTheDocument();
   });
 
   it('opens a file from the button', async () => {
@@ -65,6 +66,16 @@ describe('EmptyState', () => {
     render(<EmptyState onOpen={vi.fn()} />);
     expect(screen.getByText('Ctrl+O')).toBeInTheDocument();
     expect(screen.getByText('F5')).toBeInTheDocument();
+  });
+
+  it('says how to close a tab and how to move between tabs', () => {
+    render(<EmptyState onOpen={vi.fn()} />);
+
+    expect(screen.getByText('Ctrl+W').closest('div')).toHaveTextContent('Close the tab');
+    expect(screen.getByText('Ctrl+Shift+W').closest('div')).toHaveTextContent('Close the window');
+    expect(screen.getByText('Ctrl+Tab / Ctrl+Shift+Tab').closest('div')).toHaveTextContent(
+      'Next and previous tab',
+    );
   });
 
   // The start screen is set like a document: its headings carry the marks in the margin, and the

@@ -1,9 +1,16 @@
+import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import { describe, expect, it, vi } from 'vitest';
 import type { Settings } from '../shared/settings';
 import { IpcChannel, type InvokeChannel } from '../shared/ipc';
+import type { OpenLinkOptions, TabsSnapshot } from '../shared/tabs';
 import type { OpenOutcome } from '../shared/types';
 import type { UpdateState } from '../shared/updates';
-import { createIpcHandlers, DEFAULT_APPS_SETTINGS_URL, type IpcHandlerDeps } from './ipc';
+import {
+  createIpcHandlers,
+  DEFAULT_APPS_SETTINGS_URL,
+  registerIpcHandlers,
+  type IpcHandlerDeps,
+} from './ipc';
 
 const TRUSTED = 'app://md-reader/index.html';
 const UNTRUSTED = 'https://evil.example/page';
@@ -11,7 +18,9 @@ const canceled: OpenOutcome = { status: 'canceled' };
 
 const invokeChannels = Object.values(IpcChannel).filter(
   (channel): channel is InvokeChannel =>
-    channel !== IpcChannel.documentOpened && channel !== IpcChannel.updateState,
+    channel !== IpcChannel.documentOpened &&
+    channel !== IpcChannel.updateState &&
+    channel !== IpcChannel.tabsChanged,
 );
 
 const DEFAULTS: Settings = {
@@ -19,6 +28,7 @@ const DEFAULTS: Settings = {
   zoom: 1,
   automaticUpdates: true,
   updateNoticeSeen: false,
+  restoreTabs: true,
 };
 
 /** Settings that apply a patch at once, as the real store does, and then report it written. */
@@ -36,11 +46,16 @@ function createSettingsFake() {
 function createDeps() {
   return {
     controller: {
-      openFromDialog: vi.fn(() => Promise.resolve(canceled)),
-      openPath: vi.fn((_input: unknown) => Promise.resolve(canceled)),
-      reopen: vi.fn((_input: unknown) => Promise.resolve(canceled)),
-      openLink: vi.fn((_href: unknown) => Promise.resolve(canceled)),
-      reload: vi.fn(() => Promise.resolve(canceled)),
+      openFromDialog: vi.fn(() => Promise.resolve([canceled])),
+      openPaths: vi.fn((_input: unknown) => Promise.resolve([canceled])),
+      reopen: vi.fn((_tabId: unknown, _input: unknown) => Promise.resolve(canceled)),
+      openLink: vi.fn((_href: unknown, _options: OpenLinkOptions) => Promise.resolve(canceled)),
+      reload: vi.fn((_tabId: unknown) => Promise.resolve(canceled)),
+      getTabs: vi.fn((): TabsSnapshot => ({ tabs: [], activeId: undefined, version: 0 })),
+      activateTab: vi.fn((_id: unknown) => undefined),
+      closeTab: vi.fn((_id: unknown) => undefined),
+      moveTab: vi.fn((_id: unknown, _toIndex: unknown) => undefined),
+      loadTab: vi.fn((_id: unknown) => Promise.resolve(canceled)),
       rendererReady: vi.fn(),
     },
     settings: createSettingsFake(),
@@ -181,6 +196,17 @@ describe('createIpcHandlers', () => {
       expect(await answer).toEqual({ ...DEFAULTS, automaticUpdates: false });
     });
 
+    it('lets the page switch reopening of tabs off, and tells the app so it can forget them', async () => {
+      const deps = createDeps();
+
+      await createIpcHandlers(deps)[IpcChannel.updateSettings](TRUSTED, { restoreTabs: false });
+
+      expect(deps.settings.update).toHaveBeenCalledExactlyOnceWith({ restoreTabs: false });
+      expect(deps.onSettingsChanged).toHaveBeenCalledWith(
+        expect.objectContaining({ restoreTabs: false }),
+      );
+    });
+
     it.each([
       ['an unknown key', { theme: 'dark', isAdmin: true }],
       ['an unknown theme', { theme: 'neon' }],
@@ -212,26 +238,164 @@ describe('createIpcHandlers', () => {
       const deps = createDeps();
       const handlers = createIpcHandlers(deps);
 
-      expect(await handlers[IpcChannel.openDialog](TRUSTED)).toEqual(canceled);
-      expect(await handlers[IpcChannel.reloadDocument](TRUSTED)).toEqual(canceled);
+      expect(await handlers[IpcChannel.openDialog](TRUSTED)).toEqual([canceled]);
+      expect(await handlers[IpcChannel.reloadDocument](TRUSTED, 'tab-2')).toEqual(canceled);
       expect(await handlers[IpcChannel.openLink](TRUSTED, 'file:///C:/a.md')).toEqual(canceled);
 
       expect(deps.controller.openFromDialog).toHaveBeenCalledOnce();
-      expect(deps.controller.reload).toHaveBeenCalledOnce();
-      expect(deps.controller.openLink).toHaveBeenCalledExactlyOnceWith('file:///C:/a.md');
+      expect(deps.controller.reload).toHaveBeenCalledExactlyOnceWith('tab-2');
+      expect(deps.controller.openLink).toHaveBeenCalledExactlyOnceWith('file:///C:/a.md', {});
     });
 
-    it('hands a dropped path to the controller untouched so the document service can validate it', async () => {
+    it('reloads nothing the page does not name, and leaves it to the controller to say what is no tab', async () => {
       const deps = createDeps();
-      await createIpcHandlers(deps)[IpcChannel.openDropped](TRUSTED, 42);
-      expect(deps.controller.openPath).toHaveBeenCalledExactlyOnceWith(42);
+
+      await createIpcHandlers(deps)[IpcChannel.reloadDocument](TRUSTED, 'C:\\private\\notes.md');
+      await createIpcHandlers(deps)[IpcChannel.reloadDocument](TRUSTED);
+
+      expect(deps.controller.reload.mock.calls).toEqual([['C:\\private\\notes.md'], [undefined]]);
+    });
+
+    it('follows a link in a tab of its own when the page asks for that', async () => {
+      const deps = createDeps();
+
+      await createIpcHandlers(deps)[IpcChannel.openLink](TRUSTED, 'file:///C:/a.md', {
+        newTab: true,
+      });
+
+      expect(deps.controller.openLink).toHaveBeenCalledExactlyOnceWith('file:///C:/a.md', {
+        newTab: true,
+      });
+    });
+
+    it('follows a link in the tab the page says it is in', async () => {
+      const deps = createDeps();
+
+      await createIpcHandlers(deps)[IpcChannel.openLink](TRUSTED, 'file:///C:/a.md', {
+        tabId: 'tab-4',
+      });
+      await createIpcHandlers(deps)[IpcChannel.openLink](TRUSTED, 'file:///C:/b.md', {
+        tabId: 'tab-4',
+        newTab: true,
+      });
+
+      expect(deps.controller.openLink.mock.calls).toEqual([
+        ['file:///C:/a.md', { tabId: 'tab-4' }],
+        ['file:///C:/b.md', { tabId: 'tab-4', newTab: true }],
+      ]);
+    });
+
+    it.each([
+      ['nothing', undefined],
+      ['null', null],
+      ['a text', 'yes'],
+      ['a number', 1],
+      ['a list', ['tab-1']],
+      ['a text for the wish', { newTab: 'true' }],
+      ['a number for the wish', { newTab: 1 }],
+      ['an unknown wish', { newWindow: true }],
+      ['a number for the tab', { tabId: 7 }],
+      ['an object for the tab', { tabId: { toString: 'tab-1' } }],
+    ])('takes %s as no wish at all', async (_label, options) => {
+      const deps = createDeps();
+
+      await createIpcHandlers(deps)[IpcChannel.openLink](TRUSTED, 'file:///C:/a.md', options);
+
+      expect(deps.controller.openLink).toHaveBeenCalledExactlyOnceWith('file:///C:/a.md', {});
+    });
+
+    it('passes on nothing of the options but the two it knows', async () => {
+      const deps = createDeps();
+
+      await createIpcHandlers(deps)[IpcChannel.openLink](TRUSTED, 'file:///C:/a.md', {
+        tabId: 'tab-1',
+        newTab: true,
+        fromLink: { currentDocumentPath: undefined },
+        path: 'C:\\evil.md',
+      });
+
+      expect(deps.controller.openLink).toHaveBeenCalledExactlyOnceWith('file:///C:/a.md', {
+        tabId: 'tab-1',
+        newTab: true,
+      });
+    });
+
+    it('hands the paths of a drop to the controller untouched so the document service can validate them', async () => {
+      const deps = createDeps();
+      const dropped = ['C:\\docs\\a.md', 42];
+
+      expect(await createIpcHandlers(deps)[IpcChannel.openDropped](TRUSTED, dropped)).toEqual([
+        canceled,
+      ]);
+
+      expect(deps.controller.openPaths).toHaveBeenCalledExactlyOnceWith(dropped);
     });
 
     it('goes back only through the controller, which knows which documents were shown', async () => {
       const deps = createDeps();
-      await createIpcHandlers(deps)[IpcChannel.reopenDocument](TRUSTED, 'C:\\docs\\a.md');
-      expect(deps.controller.reopen).toHaveBeenCalledExactlyOnceWith('C:\\docs\\a.md');
-      expect(deps.controller.openPath).not.toHaveBeenCalled();
+      await createIpcHandlers(deps)[IpcChannel.reopenDocument](TRUSTED, 'tab-3', 'C:\\docs\\a.md');
+      expect(deps.controller.reopen).toHaveBeenCalledExactlyOnceWith('tab-3', 'C:\\docs\\a.md');
+      expect(deps.controller.openPaths).not.toHaveBeenCalled();
+    });
+
+    it('passes on nothing for Back but the tab and the path, whatever else the page sends along', async () => {
+      const deps = createDeps();
+
+      await createIpcHandlers(deps)[IpcChannel.reopenDocument](
+        TRUSTED,
+        'tab-3',
+        'C:\\docs\\a.md',
+        'C:\\evil.md',
+      );
+
+      expect(deps.controller.reopen).toHaveBeenCalledExactlyOnceWith('tab-3', 'C:\\docs\\a.md');
+    });
+  });
+
+  describe('tabs', () => {
+    it('tells the page which tabs there are, and which one is on screen', async () => {
+      const deps = createDeps();
+      const snapshot: TabsSnapshot = {
+        tabs: [{ id: 'tab-1', path: 'C:\\docs\\a.md' }],
+        activeId: 'tab-1',
+        version: 3,
+      };
+      deps.controller.getTabs.mockReturnValue(snapshot);
+
+      expect(await createIpcHandlers(deps)[IpcChannel.getTabs](TRUSTED)).toEqual(snapshot);
+    });
+
+    it('passes a switch, a close and a move to the controller, which checks the ids', async () => {
+      const deps = createDeps();
+      const handlers = createIpcHandlers(deps);
+
+      await handlers[IpcChannel.activateTab](TRUSTED, 'tab-2');
+      await handlers[IpcChannel.closeTab](TRUSTED, 'tab-3');
+      await handlers[IpcChannel.moveTab](TRUSTED, 'tab-4', 0);
+
+      expect(deps.controller.activateTab).toHaveBeenCalledExactlyOnceWith('tab-2');
+      expect(deps.controller.closeTab).toHaveBeenCalledExactlyOnceWith('tab-3');
+      expect(deps.controller.moveTab).toHaveBeenCalledExactlyOnceWith('tab-4', 0);
+    });
+
+    it('passes on nothing but the id and the place, whatever else the page sends along', async () => {
+      const deps = createDeps();
+      const handlers = createIpcHandlers(deps);
+
+      await handlers[IpcChannel.activateTab](TRUSTED, 'tab-2', 'C:\\evil.md');
+      await handlers[IpcChannel.moveTab](TRUSTED, 'tab-4', 1, 'C:\\evil.md');
+      await handlers[IpcChannel.loadTab](TRUSTED, 'tab-5', 'C:\\evil.md');
+
+      expect(deps.controller.activateTab).toHaveBeenCalledExactlyOnceWith('tab-2');
+      expect(deps.controller.moveTab).toHaveBeenCalledExactlyOnceWith('tab-4', 1);
+      expect(deps.controller.loadTab).toHaveBeenCalledExactlyOnceWith('tab-5');
+    });
+
+    it('reads the document of a tab through the controller', async () => {
+      const deps = createDeps();
+
+      expect(await createIpcHandlers(deps)[IpcChannel.loadTab](TRUSTED, 'tab-5')).toEqual(canceled);
+      expect(deps.controller.loadTab).toHaveBeenCalledExactlyOnceWith('tab-5');
     });
   });
 
@@ -313,5 +477,61 @@ describe('createIpcHandlers', () => {
       await createIpcHandlers(deps)[IpcChannel.closeWindow](TRUSTED);
       expect(deps.closeWindow).toHaveBeenCalledOnce();
     });
+  });
+});
+
+describe('registerIpcHandlers', () => {
+  type Listener = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
+
+  /** An `ipcMain` that only remembers who listens on which channel. */
+  function register(deps = createDeps()) {
+    const handle = vi.fn<IpcMain['handle']>();
+    registerIpcHandlers({ handle }, createIpcHandlers(deps));
+    const listeners = new Map(
+      handle.mock.calls.map(([channel, listener]) => [channel, listener as Listener]),
+    );
+    return { deps, handle, listeners };
+  }
+
+  const eventFrom = (url: string | undefined): IpcMainInvokeEvent =>
+    ({ senderFrame: url === undefined ? null : { url } }) as unknown as IpcMainInvokeEvent;
+
+  it('listens on every channel the page can invoke, once each, and on no other', () => {
+    const { handle, listeners } = register();
+
+    expect(handle).toHaveBeenCalledTimes(invokeChannels.length);
+    expect([...listeners.keys()].sort()).toEqual([...invokeChannels].sort());
+  });
+
+  it('hands each handler the address of the page that sent the message, and what it sent', async () => {
+    const { deps, listeners } = register();
+
+    await listeners.get(IpcChannel.openLink)?.(eventFrom(TRUSTED), 'file:///C:/a.md', {
+      tabId: 'tab-2',
+    });
+
+    expect(deps.controller.openLink).toHaveBeenCalledExactlyOnceWith('file:///C:/a.md', {
+      tabId: 'tab-2',
+    });
+  });
+
+  it.each(invokeChannels)('refuses %s from a page that is not the app', async (channel) => {
+    const { deps, listeners } = register();
+
+    await expect(listeners.get(channel)?.(eventFrom(UNTRUSTED), 'anything')).rejects.toThrow(
+      /untrusted/i,
+    );
+
+    for (const mock of everyMock(deps)) expect(mock).not.toHaveBeenCalled();
+  });
+
+  it.each(invokeChannels)('refuses %s from a frame that is gone', async (channel) => {
+    const { deps, listeners } = register();
+
+    await expect(listeners.get(channel)?.(eventFrom(undefined), 'anything')).rejects.toThrow(
+      /untrusted/i,
+    );
+
+    for (const mock of everyMock(deps)) expect(mock).not.toHaveBeenCalled();
   });
 });

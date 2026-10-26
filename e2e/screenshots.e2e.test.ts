@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Page } from 'playwright-core';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 import { createWorkspace, removeWithRetries, type Workspace } from './support/fixtures';
-import { launchApp, type RunningApp } from './support/launch';
+import { launchApp, launchSecondInstance, type RunningApp } from './support/launch';
 
 // Regenerates the screenshots used in the README from the real application:
 //   $env:MDREADER_SCREENSHOTS = '1'; npm run test:e2e -- screenshots   (PowerShell)
@@ -91,6 +91,27 @@ describe.runIf(enabled)('screenshots', () => {
     await app.page.getByRole('button', { name: 'Switch to light theme' }).click();
     await app.page.setViewportSize({ width: 1100, height: 1780 });
     await capture(app.page, 'document-full-light.png');
+
+    // Several documents, each in a tab of its own: the sample, and two more that a second launch adds.
+    const reading = path.join(folder, 'Reading list.md');
+    const meeting = path.join(folder, 'Meeting notes.md');
+    await writeFile(
+      reading,
+      '# Reading list\n\nThings to get to this week.\n\n- [x] The release notes\n- [ ] The design document\n- [ ] The incident review\n',
+    );
+    await writeFile(
+      meeting,
+      '# Meeting notes\n\n## Decisions\n\n1. Ship the tabs.\n2. Keep the reader a reader.\n',
+    );
+    await app.page.setViewportSize({ width: 1100, height: 720 });
+    await launchSecondInstance({ userDataDir, files: [reading] });
+    await app.page.getByRole('heading', { name: 'Reading list' }).waitFor();
+    await launchSecondInstance({ userDataDir, files: [meeting] });
+    await app.page.getByRole('heading', { name: 'Meeting notes' }).waitFor();
+    await app.page.getByRole('tab', { name: 'Welcome to MD Reader.md' }).click();
+    await app.page.getByRole('heading', { name: 'Welcome to MD Reader' }).waitFor();
+    await app.page.getByText(/\d+ words/).waitFor();
+    await capture(app.page, 'tabs-light.png');
   });
 });
 

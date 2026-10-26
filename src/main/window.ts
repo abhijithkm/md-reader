@@ -1,4 +1,5 @@
 import { BrowserWindow, type Session, type WebContents } from 'electron';
+import { IpcChannel } from '../shared/ipc';
 import type { WindowPort } from './app-controller';
 import { isTrustedSender } from './ipc-guard';
 
@@ -91,7 +92,10 @@ export function createWindowPort(getWindow: () => BrowserWindow | undefined): Wi
 
   return {
     sendOutcome(outcome) {
-      usable()?.webContents.send('document:opened', outcome);
+      usable()?.webContents.send(IpcChannel.documentOpened, outcome);
+    },
+    sendTabs(snapshot) {
+      usable()?.webContents.send(IpcChannel.tabsChanged, snapshot);
     },
     reveal() {
       const window = usable();

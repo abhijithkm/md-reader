@@ -2,7 +2,7 @@ import { lstat, readFile, readlink, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isMarkdownFileName } from '../shared/markdown-files';
-import type { OpenError, OpenErrorCode, OpenOutcome } from '../shared/types';
+import type { DocumentOutcome, OpenError, OpenErrorCode } from '../shared/types';
 import { errorCode } from './errors';
 import { resolveSymlinksSafely, type SymlinkFileSystem } from './symlink-policy';
 import { decodeText } from './text-decoding';
@@ -36,7 +36,7 @@ export interface OpenOptions {
 }
 
 export interface DocumentService {
-  open(input: unknown, options?: OpenOptions): Promise<OpenOutcome>;
+  open(input: unknown, options?: OpenOptions): Promise<DocumentOutcome>;
 }
 
 const nodeFileSystem: DocumentFileSystem = {
@@ -62,7 +62,7 @@ async function openDocument(
   fs: DocumentFileSystem,
   maxBytes: number,
   options: OpenOptions,
-): Promise<OpenOutcome> {
+): Promise<DocumentOutcome> {
   if (
     typeof input !== 'string' ||
     input === '' ||
@@ -147,13 +147,13 @@ function directoryUrl(directory: string): string {
   return pathToFileURL(withSeparator).href;
 }
 
-function failed(code: OpenErrorCode, message: string, filePath?: string): OpenOutcome {
+function failed(code: OpenErrorCode, message: string, filePath?: string): DocumentOutcome {
   const error: OpenError =
     filePath === undefined ? { code, message } : { code, message, path: filePath };
   return { status: 'failed', error };
 }
 
-function failedFromFileSystem(error: unknown, name: string, filePath: string): OpenOutcome {
+function failedFromFileSystem(error: unknown, name: string, filePath: string): DocumentOutcome {
   const code = errorCode(error);
   if (code === 'ENOENT' || code === 'ENOTDIR') {
     return failed(
@@ -179,7 +179,7 @@ function failedFromFileSystem(error: unknown, name: string, filePath: string): O
   );
 }
 
-function tooLarge(name: string, size: number, maxBytes: number, filePath: string): OpenOutcome {
+function tooLarge(name: string, size: number, maxBytes: number, filePath: string): DocumentOutcome {
   return failed(
     'too-large',
     `"${name}" is ${formatSize(size)}, which is more than the ${formatSize(maxBytes)} MD Reader can open.`,

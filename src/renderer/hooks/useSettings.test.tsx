@@ -15,6 +15,7 @@ const DEFAULTS: Settings = {
   zoom: 1,
   automaticUpdates: true,
   updateNoticeSeen: false,
+  restoreTabs: true,
 };
 
 /** Controls what the operating system reports for prefers-color-scheme. */
@@ -230,6 +231,32 @@ describe('useSettings', () => {
         automaticUpdates: false,
         updateNoticeSeen: true,
       });
+    });
+  });
+
+  describe('reopening the tabs', () => {
+    it('is on until the user switches it off', async () => {
+      const { result } = await renderLoaded();
+      expect(result.current.settings.restoreTabs).toBe(true);
+    });
+
+    it('switches off and on again, and each choice is saved', async () => {
+      const { result, bridge } = await renderLoaded();
+
+      act(() => {
+        result.current.setRestoreTabs(false);
+      });
+      expect(result.current.settings.restoreTabs).toBe(false);
+
+      act(() => {
+        result.current.setRestoreTabs(true);
+      });
+      expect(result.current.settings.restoreTabs).toBe(true);
+
+      expect(bridge.updateSettings.mock.calls).toEqual([
+        [{ restoreTabs: false }],
+        [{ restoreTabs: true }],
+      ]);
     });
   });
 

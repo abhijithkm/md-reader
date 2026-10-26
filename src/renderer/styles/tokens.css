@@ -26,6 +26,7 @@
   --radius-lg: 10px;
 
   --toolbar-height: 44px;
+  --tabs-height: 36px;
   --statusbar-height: 28px;
   /* Width of the reading column: about 72 characters of body text. */
   --measure: 36.5rem;

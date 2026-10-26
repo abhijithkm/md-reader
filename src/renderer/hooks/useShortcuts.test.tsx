@@ -8,9 +8,14 @@ function createHandlers(): { [K in keyof ShortcutHandlers]: Mock<() => void> } {
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     resetZoom: vi.fn(),
-    close: vi.fn(),
+    closeTab: vi.fn(),
+    closeWindow: vi.fn(),
     reload: vi.fn(),
     back: vi.fn(),
+    nextTab: vi.fn(),
+    previousTab: vi.fn(),
+    moveTabLeft: vi.fn(),
+    moveTabRight: vi.fn(),
   };
 }
 
@@ -20,9 +25,14 @@ describe('useShortcuts', () => {
     ['zoomIn', { key: '=', ctrlKey: true }],
     ['zoomOut', { key: '-', ctrlKey: true }],
     ['resetZoom', { key: '0', ctrlKey: true }],
-    ['close', { key: 'w', ctrlKey: true }],
+    ['closeTab', { key: 'w', ctrlKey: true }],
+    ['closeWindow', { key: 'w', ctrlKey: true, shiftKey: true }],
     ['reload', { key: 'F5' }],
     ['back', { key: 'ArrowLeft', altKey: true }],
+    ['nextTab', { key: 'Tab', ctrlKey: true }],
+    ['previousTab', { key: 'Tab', ctrlKey: true, shiftKey: true }],
+    ['moveTabLeft', { key: 'PageUp', ctrlKey: true, shiftKey: true }],
+    ['moveTabRight', { key: 'PageDown', ctrlKey: true, shiftKey: true }],
   ] as const)('runs %s and stops the browser handling the key', (action, init) => {
     const handlers = createHandlers();
     renderHook(() => {

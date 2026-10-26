@@ -37,6 +37,7 @@ describe('saved settings', () => {
       zoom: 1.25,
       automaticUpdates: true,
       updateNoticeSeen: false,
+      restoreTabs: true,
     });
   });
 

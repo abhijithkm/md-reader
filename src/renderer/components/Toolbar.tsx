@@ -1,7 +1,9 @@
 import { ArrowLeft, FolderOpen, Minus, Moon, Plus, RefreshCw, RotateCcw, Sun } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { folderNameOf } from '../../shared/tabs';
 import type { ResolvedTheme } from '../../shared/theme';
 import { DEFAULT_ZOOM, formatZoom, MAX_ZOOM, MIN_ZOOM } from '../../shared/zoom';
+import { SettingsMenu } from './SettingsMenu';
 
 export interface ToolbarProps {
   fileName: string | undefined;
@@ -17,19 +19,13 @@ export interface ToolbarProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetZoom: () => void;
+  /** Whether the tabs that are open come back the next time MD Reader starts. */
+  restoreTabs: boolean;
+  onSetRestoreTabs: (enabled: boolean) => void;
 }
 
 const EPSILON = 1e-6;
 const ICON = { size: 18, strokeWidth: 1.75 } as const;
-
-/** The name of the folder that holds the file, which tells apart documents that share a name. */
-function folderName(filePath: string | undefined): string | undefined {
-  if (filePath === undefined) return undefined;
-  return filePath
-    .split(/[\\/]/)
-    .filter((part) => part !== '')
-    .at(-2);
-}
 
 interface IconButtonProps {
   label: string;
@@ -69,9 +65,11 @@ export function Toolbar({
   onZoomIn,
   onZoomOut,
   onResetZoom,
+  restoreTabs,
+  onSetRestoreTabs,
 }: ToolbarProps) {
   const nextTheme = theme === 'light' ? 'dark' : 'light';
-  const folder = folderName(filePath);
+  const folder = filePath === undefined ? undefined : folderNameOf(filePath);
 
   return (
     <header className="toolbar">
@@ -141,6 +139,8 @@ export function Toolbar({
             <RotateCcw {...ICON} />
           </IconButton>
         </div>
+        <span className="toolbar-divider" aria-hidden="true" />
+        <SettingsMenu restoreTabs={restoreTabs} onSetRestoreTabs={onSetRestoreTabs} />
       </div>
     </header>
   );

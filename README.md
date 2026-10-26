@@ -6,7 +6,7 @@ A small, fast, offline Markdown reader for Windows 10 and 11. Double-click a `.m
 
 ![MD Reader showing a document in the light theme](docs/screenshots/document-light.png)
 
-MD Reader is a reader, not an editor. It opens one document at a time, renders GitHub Flavored Markdown as a page made for reading, and gets out of the way. It has no account and no telemetry. The installed app looks on GitHub for a newer version and keeps itself up to date (you can [switch that off](#updates)). It treats every document as untrusted: scripts in a Markdown file cannot run, and a document cannot read your files. The only network requests a document can cause are for `https` images it links to.
+MD Reader is a reader, not an editor. It opens every document in a tab of its own, renders GitHub Flavored Markdown as a page made for reading, and gets out of the way. It has no account and no telemetry. The installed app looks on GitHub for a newer version and keeps itself up to date (you can [switch that off](#updates)). It treats every document as untrusted: scripts in a Markdown file cannot run, and a document cannot read your files. The only network requests a document can cause are for `https` images it links to.
 
 - [Features](#features)
 - [Screenshots](#screenshots)
@@ -27,8 +27,9 @@ MD Reader is a reader, not an editor. It opens one document at a time, renders G
 - **A page made for reading.** A serif drawn for screens, headings in a narrower sans, and a line about 70 characters wide. The marks of the Markdown source (`#` to `######`, `>`, a code fence, `---`, and the `-` or number of each list item) hang quietly in the margin, so the level of a heading is clear at a glance. They are never selected, copied or read out, and a narrow window leaves them out. The start screen is set the same way. The fonts are the ones Windows ships (Sitka Text, Bahnschrift, Segoe UI Variable and Cascadia Mono), so nothing is downloaded.
 - **Syntax highlighting** for fenced code blocks: the common web, systems and scripting languages, JSON, YAML, SQL, diff, plus PowerShell, batch, Dockerfile, HTTP and nginx.
 - **Safe inline HTML.** `<details>`, `<kbd>`, `<img>`, tables and similar elements render. Scripts, event handlers, frames, forms and styles are removed.
-- **Relative images and links** resolve against the document's folder, not the app's. Links to other Markdown files open in the same window and Back returns you; `#heading` links scroll; web and mail links open in your default browser.
-- **Opens files the Windows way:** the Open dialog (`Ctrl+O`), double-click in Explorer, Open with, drag and drop onto the window, or the command line. When MD Reader is already running, a new file opens in the existing window.
+- **Relative images and links** resolve against the document's folder, not the app's. Links to other Markdown files open in the same tab and Back returns you (hold `Ctrl`, or use the middle button, to open one in a tab of its own); `#heading` links scroll; web and mail links open in your default browser.
+- **Opens files the Windows way:** the Open dialog (`Ctrl+O`, one file or several), double-click in Explorer, Open with, drag and drop onto the window, or the command line. When MD Reader is already running, a new file opens in a new tab of the existing window.
+- **Tabs.** Every file opens in a tab of its own, up to 30 at a time. Switch with a click or `Ctrl+Tab`, close one with `Ctrl+W` (the last tab closes the window, as in a text editor) and drag a tab to put it somewhere else. A file that is already open is shown in its tab instead of a second one. Each tab has its own Back history and remembers where you were. The tabs that were open come back the next time MD Reader starts, and the gear in the toolbar switches that off.
 - **Light and dark** themes. It follows Windows until you pick one with the toolbar button, and remembers your choice.
 - **Zoom** from 50% to 300% with the toolbar, the keyboard or `Ctrl` + mouse wheel. The level is remembered.
 - **Status bar** with file name, size, word count, reading time and line count.
@@ -43,6 +44,10 @@ These are captured from the packaged application by [`e2e/screenshots.e2e.test.t
 |                                                                                Start screen                                                                                 |                                  Dark theme                                  |
 | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------: |
 | ![The start screen, set like a document: the Open button, keyboard shortcuts, a hint for setting the default app and the Updates section](docs/screenshots/empty-state.png) | ![The sample document in the dark theme](docs/screenshots/document-dark.png) |
+
+|                                 Several documents, each in its own tab                                 |
+| :----------------------------------------------------------------------------------------------------: |
+| ![Three documents open in tabs, with the tab strip under the toolbar](docs/screenshots/tabs-light.png) |
 
 |                                              A narrow window                                              |                                                                Everything the sample document contains                                                                 |
 | :-------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
@@ -127,20 +132,28 @@ The start screen of MD Reader has an **Open Default apps settings** button that 
 MDReader.exe "C:\Documents\README.md"
 ```
 
-If MD Reader is already running, the file opens in that window instead of starting a second one.
+If MD Reader is already running, the file opens in a new tab of that window instead of starting a second one. A file that is already open is shown in the tab it has.
 
 **Keyboard and mouse**
 
-| Action                                           | Shortcut                                            |
-| :----------------------------------------------- | :-------------------------------------------------- |
-| Open a file                                      | `Ctrl+O`                                            |
-| Zoom in / out                                    | `Ctrl+Plus` / `Ctrl+Minus`, or `Ctrl` + mouse wheel |
-| Reset zoom                                       | `Ctrl+0`                                            |
-| Reload the file after editing it                 | `F5` or `Ctrl+R`                                    |
-| Back, after following a link to another document | `Alt+Left`                                          |
-| Close the window                                 | `Ctrl+W`                                            |
+| Action                                           | Shortcut                                                             |
+| :----------------------------------------------- | :------------------------------------------------------------------- |
+| Open files, each in a tab of its own             | `Ctrl+O`                                                             |
+| Next / previous tab                              | `Ctrl+Tab` / `Ctrl+Shift+Tab` (or `Ctrl+Page Down` / `Ctrl+Page Up`) |
+| Move the tab left / right                        | `Ctrl+Shift+Page Up` / `Ctrl+Shift+Page Down`                        |
+| Close the tab (the last tab closes the window)   | `Ctrl+W`                                                             |
+| Close the window                                 | `Ctrl+Shift+W`                                                       |
+| Open a link in a tab of its own                  | `Ctrl` + click, or the middle button                                 |
+| Zoom in / out                                    | `Ctrl+Plus` / `Ctrl+Minus`, or `Ctrl` + mouse wheel                  |
+| Reset zoom                                       | `Ctrl+0`                                                             |
+| Reload the file after editing it                 | `F5` or `Ctrl+R`                                                     |
+| Back, after following a link to another document | `Alt+Left`                                                           |
 
-**Settings.** MD Reader's own settings are your theme and zoom level, whether automatic updates are on, and whether you have read the note about them, in `%APPDATA%\MD Reader\settings.json`. Electron keeps its usual cache files in the same folder, and the updater keeps its `update.log` and the library's `.updaterId` file there (see [Updates](#updates)). MD Reader does not remember which documents you opened.
+On a tab you can also use the arrow keys, `Home` and `End` to move between tabs, `Delete` to close one, and the middle button to close it.
+
+**Settings.** MD Reader's own settings are your theme and zoom level, whether automatic updates are on, whether you have read the note about them, and whether the tabs that are open come back when it starts, in `%APPDATA%\MD Reader\settings.json`. Electron keeps its usual cache files in the same folder, and the updater keeps its `update.log` and the library's `.updaterId` file there (see [Updates](#updates)).
+
+**What it remembers about your documents.** So that the tabs can come back, MD Reader keeps the full path of each open file, and which tab was on screen, in `session.json` in the same folder. That is all: no text of a document, and nothing that leaves your computer. It is written only by MD Reader, never by a document or the page. A file on a network location (a path that starts with two backslashes, such as a share or `\\wsl.localhost`) is not remembered, because reading it would make Windows contact that server when MD Reader starts, with nobody having asked for it; a drive letter that is a mapped network drive cannot be told from a local drive, and is remembered. The list is read back as carefully as a file you choose yourself: only paths of `.md` and `.markdown` files on this computer, at most 30, and a remembered file is checked, the first time it is read, as a link in a document is, so one that has become a link to a network share since is refused. The tabs are read from disk when you first look at them, and one whose file has gone stays, with a note, until you close it. **Reopen tabs when MD Reader starts** (the gear in the toolbar) switches this off, and switching it off deletes `session.json`; nothing is remembered while it is off.
 
 ## Build from source
 
@@ -203,7 +216,7 @@ The step-by-step process for cutting a release is in [docs/RELEASING.md](docs/RE
 
 ## Known limitations
 
-- One window and one document at a time: no tabs, no editing, no find-in-page, no Mermaid diagrams or math.
+- One window with up to 30 tabs: tabs cannot be moved out into windows of their own, and there is no editing, no find-in-page, no Mermaid diagrams or math.
 - Files over 5 MiB are refused. A document with tens of thousands of blocks (for example a huge table or list) can take several seconds to finish rendering; the window stays usable meanwhile.
 - A changed file is not reloaded automatically. Press `F5`.
 - Images: `https` images load from the network when a document references them (so they are missing offline), plain `http` images are blocked, and local images must be PNG, JPEG, GIF, WebP, AVIF, BMP, ICO or SVG, up to 25 MB.
@@ -228,7 +241,7 @@ Markdown is untrusted input, so the app is built so that a hostile document can 
 - Raw HTML in a document is sanitized with a GitHub-style allow-list before it reaches the page.
 - Links are checked before they are followed: only `http`, `https` and `mailto` links leave the app, and only Markdown files open inside it. The window never navigates away from the app, opens no pop-ups, and downloads nothing.
 - Local files named by a document are checked in the main process: network shares, Windows device names and NTFS alternate data streams are refused, and only image files are served. A symbolic link or junction is followed step by step, so one that leads to a network share is refused before anything is sent to the server.
-- The window never presents your Windows client certificate to a server, and the page cannot ask the main process to open a file of its own choosing: the path of a dropped file comes from the drop itself, and Back only returns to documents already shown.
+- The window never presents your Windows client certificate to a server. The page can name a file to open in only two ways: a file you dropped, whose path comes from the drop itself, and a link, which is checked as described above. Back only returns to documents already shown, and a tab is named by an id that only the main process issues, so the page cannot make the app read or change anything by naming a path.
 - A hostile file cannot hang or blank the window: absurd nesting is shown as plain text, very long code lines are not highlighted, and a part of a document that cannot be drawn is replaced by a message while the rest is shown.
 - Updating is done by the main process and takes no input from the page: the source is fixed in the package, what a release offers is checked before it is downloaded, each download is checked against the hash in the release's `latest.yml`, versions are accepted only as plain version numbers, an older version never replaces a newer one, requests that stall or redirect for ever are cut off, and the page can only ask to check, to switch updating on or off (the setting in the Updates section), and to restart into an update that was already downloaded and checked. Because the builds are not code-signed, the app cannot verify who built an update: whoever can publish a release on this repository can update every installed copy (see [Updates](#updates)).
 - Electron's runtime hardening is switched on in the packaged app: it cannot be run as plain Node.js, ignores `NODE_OPTIONS` and `--inspect`, and only loads its code from the application archive, whose integrity is checked at startup.

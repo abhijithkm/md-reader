@@ -24,7 +24,8 @@ export type OpenErrorCode =
   | 'not-a-file'
   | 'too-large'
   | 'unreadable'
-  | 'blocked-link';
+  | 'blocked-link'
+  | 'too-many-tabs';
 
 export interface OpenError {
   code: OpenErrorCode;
@@ -33,10 +34,17 @@ export interface OpenError {
   path?: string;
 }
 
+/** What reading a file gives: the document, or why it cannot be shown. It knows nothing of tabs. */
+export type DocumentOutcome =
+  { status: 'opened'; document: MarkdownDocument } | { status: 'failed'; error: OpenError };
+
+/** What the page is told about a request to open a document. */
 export type OpenOutcome =
   | {
       status: 'opened';
       document: MarkdownDocument;
+      /** The tab that shows the document: a new one, or the one that already showed it. */
+      tabId: string;
       /** Heading to scroll to when the document was opened through a link such as `guide.md#install`. */
       anchor?: string;
     }

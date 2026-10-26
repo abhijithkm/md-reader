@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import ReactMarkdown, { type Components, type ExtraProps } from 'react-markdown';
+import type { LinkWish } from '../../shared/tabs';
 import { RenderBoundary } from '../components/RenderBoundary';
 import { findAnchorTarget } from './anchors';
 import { splitMarkdown, type ChunkOptions } from './chunks';
@@ -22,8 +23,11 @@ import { SlugSequence } from './slugs';
 
 export interface LinkActions {
   openExternal: (url: string) => void;
-  /** `fileUrl` is an absolute file: URL, possibly with a #fragment. */
-  openLocal: (fileUrl: string) => void;
+  /**
+   * `fileUrl` is an absolute file: URL, possibly with a #fragment. Without a wish it opens in the
+   * tab the link is in; a click with Ctrl held, or a middle click, asks for a tab of its own.
+   */
+  openLocal: (fileUrl: string, wish?: LinkWish) => void;
 }
 
 export interface MarkdownRendererProps {
@@ -260,7 +264,8 @@ function MarkdownLink({ href, title, attributes, baseUrl, actions, children }: M
         actions.openExternal(target.url);
         break;
       case 'local':
-        actions.openLocal(target.fileUrl);
+        if (event.ctrlKey) actions.openLocal(target.fileUrl, { newTab: true });
+        else actions.openLocal(target.fileUrl);
         break;
     }
   };
@@ -273,7 +278,11 @@ function MarkdownLink({ href, title, attributes, baseUrl, actions, children }: M
       title={title ?? (target.kind === 'anchor' ? undefined : destination)}
       onClick={handleClick}
       onAuxClick={(event) => {
+        // The page must never follow a link itself, whatever button was used.
         event.preventDefault();
+        if (event.button === 1 && target.kind === 'local') {
+          actions.openLocal(target.fileUrl, { newTab: true });
+        }
       }}
     >
       {children}

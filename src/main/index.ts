@@ -25,6 +25,7 @@ import { createDocumentService } from './documents';
 import { createIpcHandlers, registerIpcHandlers } from './ipc';
 import { handleLocalImageRequest } from './local-image-protocol';
 import { resolveRendererLocation } from './renderer-location';
+import { SessionStore } from './session-store';
 import { SettingsStore } from './settings-store';
 import { resolveUpdateEnvironment } from './update-environment';
 import { createUpdaterPort, writeTestFeedConfig } from './updater-adapter';
@@ -63,6 +64,16 @@ function start(): void {
   });
   const initialSettings = settingsStore.load();
   nativeTheme.themeSource = initialSettings.theme;
+
+  // Which documents were open in tabs, kept in the profile folder so that the next run can open
+  // them again. Only the main process writes it, and switching the setting off removes it.
+  const sessionStore = new SessionStore(path.join(app.getPath('userData'), 'session.json'), {
+    onError: (error) => {
+      console.error('[session]', error);
+    },
+  });
+  sessionStore.setEnabled(initialSettings.restoreTabs);
+  let rememberingTabs = initialSettings.restoreTabs;
 
   const { url: rendererUrl, trustedOrigins } = resolveRendererLocation({
     isPackaged: app.isPackaged,
@@ -131,22 +142,28 @@ function start(): void {
     documents: createDocumentService(),
     getWindow: () =>
       mainWindow !== undefined && !mainWindow.isDestroyed() ? windowPort : undefined,
-    showOpenDialog: async (): Promise<string | undefined> => {
+    showOpenDialog: async (): Promise<string[]> => {
       const currentPath = controller.getCurrentDocumentPath();
       const options = {
-        title: 'Open Markdown file',
+        title: 'Open Markdown files',
         ...(currentPath === undefined ? {} : { defaultPath: path.dirname(currentPath) }),
-        properties: ['openFile' as const],
+        properties: ['openFile' as const, 'multiSelections' as const],
         filters: [{ name: 'Markdown files', extensions: ['md', 'markdown'] }],
       };
       const result =
         mainWindow === undefined
           ? await dialog.showOpenDialog(options)
           : await dialog.showOpenDialog(mainWindow, options);
-      return result.canceled ? undefined : result.filePaths[0];
+      return result.canceled ? [] : result.filePaths;
     },
     isPackaged: app.isPackaged,
+    onTabsChanged: (session) => {
+      sessionStore.save(session);
+    },
   });
+  // The tabs of the last run, shown without reading them; a file named on the command line is
+  // added after them below.
+  if (initialSettings.restoreTabs) controller.restoreSession(sessionStore.load());
 
   const applyTheme = (theme: Settings['theme']): void => {
     nativeTheme.themeSource = theme;
@@ -180,6 +197,13 @@ function start(): void {
         // First what must not wait or be skipped: someone who turned updating off must not get an
         // update because a change of theme went wrong.
         updates.setEnabled(settings.automaticUpdates);
+        // The same for the tabs: switching the remembering off removes what was remembered at
+        // once, and switching it on remembers the tabs that are open now.
+        if (settings.restoreTabs !== rememberingTabs) {
+          rememberingTabs = settings.restoreTabs;
+          sessionStore.setEnabled(rememberingTabs);
+          if (rememberingTabs) sessionStore.save(controller.sessionData());
+        }
         applyTheme(settings.theme);
       },
     }),
@@ -197,14 +221,14 @@ function start(): void {
     app.quit();
   });
 
-  // Let a pending settings write finish before the process exits.
-  let flushedSettings = false;
+  // Let pending writes (the settings, the open tabs) finish before the process exits.
+  let flushedFiles = false;
   app.on('before-quit', (event) => {
     updates.stop();
-    if (flushedSettings) return;
+    if (flushedFiles) return;
     event.preventDefault();
-    flushedSettings = true;
-    void settingsStore.flush().finally(() => {
+    flushedFiles = true;
+    void Promise.all([settingsStore.flush(), sessionStore.flush()]).finally(() => {
       app.quit();
     });
   });

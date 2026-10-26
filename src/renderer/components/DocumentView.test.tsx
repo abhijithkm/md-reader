@@ -27,6 +27,7 @@ function renderView(content: string, overrides: Partial<DocumentViewProps> = {})
     actions: { openExternal: vi.fn(), openLocal: vi.fn() },
     onStats: vi.fn(),
     onZoomStep: vi.fn<DocumentViewProps['onZoomStep']>(),
+    onScrollTop: vi.fn<DocumentViewProps['onScrollTop']>(),
     ...overrides,
   };
   const view = render(<DocumentView {...props} />);
@@ -84,6 +85,88 @@ describe('DocumentView', () => {
     );
 
     expect(scrollRef.current?.scrollTop).toBe(0);
+  });
+
+  describe('telling where the reader has scrolled to', () => {
+    const acts = [
+      ['turns the wheel', (region: HTMLElement) => fireEvent.wheel(region, { deltaY: 120 })],
+      ['presses a key', (region: HTMLElement) => fireEvent.keyDown(region, { key: 'ArrowDown' })],
+      ['presses the pointer', (region: HTMLElement) => fireEvent.pointerDown(region)],
+      ['touches the screen', (region: HTMLElement) => fireEvent.touchStart(region)],
+    ] as const;
+
+    function scrollTo(region: HTMLElement, top: number): void {
+      region.scrollTop = top;
+      fireEvent.scroll(region);
+    }
+
+    it.each(acts)('hears where the reader is once they %s', (_label, act) => {
+      const { props } = renderView('# Title');
+      const region = screen.getByRole('region', { name: 'notes.md' });
+
+      act(region);
+      scrollTo(region, 120);
+      scrollTo(region, 340);
+
+      expect(vi.mocked(props.onScrollTop).mock.calls).toEqual([[120], [340]]);
+    });
+
+    it('says nothing about where the app has put a document', () => {
+      const { props } = renderView('# Title', { scrollRequest: { token: 2, top: 240 } });
+      const region = screen.getByRole('region', { name: 'notes.md' });
+
+      // The scroll event that follows the app's own positioning, and one that a layout change causes.
+      scrollTo(region, 240);
+      scrollTo(region, 100);
+
+      expect(props.onScrollTop).not.toHaveBeenCalled();
+    });
+
+    it('hears the reader again only once they have acted on the document that is drawn now', () => {
+      const { props, rerender } = renderView('# One', { scrollRequest: { token: 1, top: 0 } });
+      const region = screen.getByRole('region', { name: 'notes.md' });
+      fireEvent.wheel(region, { deltaY: 120 });
+      scrollTo(region, 50);
+      vi.mocked(props.onScrollTop).mockClear();
+
+      rerender(
+        <DocumentView
+          {...props}
+          document={makeDocument('# Two')}
+          scrollRequest={{ token: 2, top: 0 }}
+        />,
+      );
+      scrollTo(region, 0);
+      expect(props.onScrollTop).not.toHaveBeenCalled();
+
+      fireEvent.wheel(region, { deltaY: 120 });
+      scrollTo(region, 80);
+      expect(props.onScrollTop).toHaveBeenCalledExactlyOnceWith(80);
+    });
+
+    it('tells the one it was last given', () => {
+      const { props, rerender } = renderView('# Title');
+      const region = screen.getByRole('region', { name: 'notes.md' });
+      fireEvent.wheel(region, { deltaY: 120 });
+      const later = vi.fn<DocumentViewProps['onScrollTop']>();
+
+      rerender(<DocumentView {...props} onScrollTop={later} />);
+      scrollTo(region, 60);
+
+      expect(later).toHaveBeenCalledExactlyOnceWith(60);
+      expect(props.onScrollTop).not.toHaveBeenCalled();
+    });
+
+    it('stops telling when the document is taken away', () => {
+      const { props, unmount } = renderView('# Title');
+      const region = screen.getByRole('region', { name: 'notes.md' });
+      fireEvent.wheel(region, { deltaY: 120 });
+
+      unmount();
+      scrollTo(region, 60);
+
+      expect(props.onScrollTop).not.toHaveBeenCalled();
+    });
   });
 
   describe('Ctrl + mouse wheel zoom', () => {

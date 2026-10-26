@@ -1,19 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { MdReaderApi } from '../shared/ipc';
 import type { Settings } from '../shared/settings';
+import { fileNameOf } from '../shared/tabs';
 import type { UpdateState } from '../shared/updates';
 import { DocumentView, type DocumentStats } from './components/DocumentView';
 import { DropOverlay } from './components/DropOverlay';
 import { EmptyState } from './components/EmptyState';
 import { NoticeBar } from './components/NoticeBar';
 import { StatusBar } from './components/StatusBar';
+import { TAB_PANEL_ID, TabStrip, tabButtonId } from './components/TabStrip';
+import { TabUnavailable } from './components/TabUnavailable';
 import { Toolbar } from './components/Toolbar';
 import { UpdateNotice, type UpdateNoticeContent } from './components/UpdateNotice';
-import { useDocument } from './hooks/useDocument';
 import { useDropTarget } from './hooks/useDropTarget';
 import { useSettings } from './hooks/useSettings';
 import { useShortcuts } from './hooks/useShortcuts';
 import { useUpdates } from './hooks/useUpdates';
+import { useWorkspace } from './hooks/useWorkspace';
 import type { LinkActions } from './markdown/MarkdownRenderer';
 
 const LINK_FAILED = 'That link could not be opened.';
@@ -63,8 +66,9 @@ export function App({ bridge }: { bridge: MdReaderApi }) {
   const [dismissedUpdate, setDismissedUpdate] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLElement | null>(null);
   const getScrollTop = useCallback(() => scrollRef.current?.scrollTop ?? 0, []);
-  const documents = useDocument(bridge, { getScrollTop });
-  const { document: current, openFile, openDropped, openLink, reload, goBack, report } = documents;
+  const workspace = useWorkspace(bridge, { getScrollTop });
+  const { document: current, activeTab, tabs, activeId, problem } = workspace;
+  const { openFile, openDropped, openLink, reload, goBack, report } = workspace;
 
   // Word and line counts arrive after rendering; show them only for the document they describe.
   const [counted, setCounted] = useState<CountedStats | undefined>(undefined);
@@ -80,7 +84,9 @@ export function App({ bridge }: { bridge: MdReaderApi }) {
   );
   const stats = counted !== undefined && counted.key === statsKey ? counted.value : undefined;
 
-  const title = current === undefined ? 'MD Reader' : `${current.name} — MD Reader`;
+  // The window is named after the tab on screen, also while its document is still being read.
+  const activeName = activeTab === undefined ? undefined : fileNameOf(activeTab.path);
+  const title = activeName === undefined ? 'MD Reader' : `${activeName} — MD Reader`;
   useEffect(() => {
     window.document.title = title;
   }, [title]);
@@ -97,8 +103,8 @@ export function App({ bridge }: { bridge: MdReaderApi }) {
           },
         );
       },
-      openLocal: (fileUrl) => {
-        void openLink(fileUrl);
+      openLocal: (fileUrl, options) => {
+        void openLink(fileUrl, options);
       },
     }),
     [bridge, openLink, report],
@@ -124,12 +130,18 @@ export function App({ bridge }: { bridge: MdReaderApi }) {
         };
 
   const handleDrop = useCallback(
-    (file: File) => {
-      void openDropped(file);
+    (files: File[]) => {
+      void openDropped(files);
     },
     [openDropped],
   );
   const { dragging } = useDropTarget(handleDrop);
+
+  /** F5 reads the document again, or, for a tab whose file could not be read, tries once more. */
+  const refresh = (): void => {
+    if (current !== undefined) void reload();
+    else if (problem !== undefined) workspace.retry();
+  };
 
   useShortcuts({
     open: () => {
@@ -138,44 +150,112 @@ export function App({ bridge }: { bridge: MdReaderApi }) {
     zoomIn: settings.zoomIn,
     zoomOut: settings.zoomOut,
     resetZoom: settings.resetZoom,
-    close: () => {
+    closeTab: () => {
+      if (activeId !== undefined) workspace.closeTab(activeId);
+      // The last tab goes with the window, as in a text editor; with none open only the window is left.
+      if (tabs.length <= 1) void bridge.closeWindow();
+    },
+    closeWindow: () => {
       void bridge.closeWindow();
     },
-    reload: () => {
-      if (current !== undefined) void reload();
-    },
+    reload: refresh,
     back: () => {
       void goBack();
     },
+    nextTab: workspace.nextTab,
+    previousTab: workspace.previousTab,
+    moveTabLeft: () => {
+      workspace.moveActiveTab(-1);
+    },
+    moveTabRight: () => {
+      workspace.moveActiveTab(1);
+    },
   });
 
-  // Wait for the saved theme before painting anything, so a dark theme never flashes light.
-  if (!settings.loaded) return null;
+  // Wait for the saved theme and the open tabs before painting anything, so that a dark theme never
+  // flashes light and the start page never flashes before the tabs of the last run.
+  if (!settings.loaded || !workspace.ready) return null;
+
+  let content: ReactNode = null;
+  if (current !== undefined) {
+    content = (
+      <DocumentView
+        document={current}
+        zoom={settings.settings.zoom}
+        scrollRequest={workspace.scrollRequest}
+        scrollRef={scrollRef}
+        actions={actions}
+        onStats={handleStats}
+        onZoomStep={(direction) => {
+          if (direction === 'in') settings.zoomIn();
+          else settings.zoomOut();
+        }}
+        onScrollTop={workspace.noteScrolled}
+      />
+    );
+  } else if (activeTab === undefined) {
+    content = (
+      <EmptyState
+        onOpen={() => {
+          void openFile();
+        }}
+        onOpenDefaultApps={() => {
+          bridge.openDefaultAppsSettings().catch(() => {
+            report(SETTINGS_FAILED);
+          });
+        }}
+        {...(updatesPanel === undefined ? {} : { updates: updatesPanel })}
+      />
+    );
+  } else if (problem !== undefined) {
+    content = (
+      <TabUnavailable
+        name={fileNameOf(activeTab.path)}
+        message={problem}
+        onRetry={workspace.retry}
+        onClose={() => {
+          workspace.closeTab(activeTab.id);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="app">
       <Toolbar
-        fileName={current?.name}
-        filePath={current?.path}
+        fileName={activeName}
+        filePath={activeTab?.path}
         zoom={settings.settings.zoom}
         theme={settings.resolvedTheme}
-        canGoBack={documents.canGoBack}
-        canReload={current !== undefined}
+        canGoBack={workspace.canGoBack}
+        canReload={current !== undefined || problem !== undefined}
         onOpen={() => {
           void openFile();
         }}
         onBack={() => {
           void goBack();
         }}
-        onReload={() => {
-          void reload();
-        }}
+        onReload={refresh}
         onToggleTheme={settings.toggleTheme}
         onZoomIn={settings.zoomIn}
         onZoomOut={settings.zoomOut}
         onResetZoom={settings.resetZoom}
+        restoreTabs={settings.settings.restoreTabs}
+        onSetRestoreTabs={settings.setRestoreTabs}
       />
-      <NoticeBar notice={documents.notice} onDismiss={documents.dismissNotice} />
+      {tabs.length > 0 && (
+        <TabStrip
+          tabs={tabs}
+          activeId={activeId}
+          onActivate={workspace.activateTab}
+          onClose={workspace.closeTab}
+          onMove={workspace.moveTab}
+          onNew={() => {
+            void openFile();
+          }}
+        />
+      )}
+      <NoticeBar notice={workspace.notice} onDismiss={workspace.dismissNotice} />
       {updateNotice !== undefined && (
         <UpdateNotice
           key={updateNotice.key}
@@ -196,38 +276,26 @@ export function App({ bridge }: { bridge: MdReaderApi }) {
           }}
         />
       )}
-      <main className="app-main" aria-busy={documents.loading}>
-        {current === undefined ? (
-          <EmptyState
-            onOpen={() => {
-              void openFile();
-            }}
-            onOpenDefaultApps={() => {
-              bridge.openDefaultAppsSettings().catch(() => {
-                report(SETTINGS_FAILED);
-              });
-            }}
-            {...(updatesPanel === undefined ? {} : { updates: updatesPanel })}
-          />
+      <main className="app-main" aria-busy={workspace.loading}>
+        {activeTab === undefined ? (
+          content
         ) : (
-          <DocumentView
-            document={current}
-            zoom={settings.settings.zoom}
-            scrollRequest={documents.scrollRequest}
-            scrollRef={scrollRef}
-            actions={actions}
-            onStats={handleStats}
-            onZoomStep={(direction) => {
-              if (direction === 'in') settings.zoomIn();
-              else settings.zoomOut();
-            }}
-          />
+          <div
+            className="tab-panel"
+            role="tabpanel"
+            id={TAB_PANEL_ID}
+            aria-labelledby={tabButtonId(activeTab.id)}
+          >
+            {content}
+          </div>
         )}
       </main>
       <StatusBar
-        {...(current === undefined
-          ? {}
-          : { name: current.name, path: current.path, sizeBytes: current.sizeBytes })}
+        {...(current !== undefined
+          ? { name: current.name, path: current.path, sizeBytes: current.sizeBytes }
+          : activeTab !== undefined && activeName !== undefined
+            ? { name: activeName, path: activeTab.path }
+            : {})}
         {...(stats === undefined ? {} : { stats })}
       />
       {dragging && <DropOverlay />}

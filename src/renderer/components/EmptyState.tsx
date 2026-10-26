@@ -10,11 +10,13 @@ export interface EmptyStateProps {
 }
 
 const SHORTCUTS: readonly (readonly [keys: string, action: string])[] = [
-  ['Ctrl+O', 'Open a file'],
+  ['Ctrl+O', 'Open files, each in a tab of its own'],
+  ['Ctrl+W', 'Close the tab'],
+  ['Ctrl+Shift+W', 'Close the window'],
+  ['Ctrl+Tab / Ctrl+Shift+Tab', 'Next and previous tab'],
   ['Ctrl+Plus / Ctrl+Minus', 'Zoom in and out'],
   ['Ctrl+0', 'Reset zoom'],
   ['F5', 'Reload the document'],
-  ['Ctrl+W', 'Close the window'],
 ];
 
 /**
@@ -28,7 +30,8 @@ export function EmptyState({ onOpen, onOpenDefaultApps, updates }: EmptyStatePro
         <AppLogo size={48} />
         <h1 id="empty-title">Open a Markdown file</h1>
         <p className="empty-lead">
-          Drag a .md or .markdown file onto this window, or choose one to start reading.
+          Drag .md or .markdown files onto this window, or choose them to start reading. Each file
+          opens in a tab of its own.
         </p>
         <div className="empty-actions">
           <button type="button" className="button button-primary" onClick={onOpen}>

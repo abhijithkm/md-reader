@@ -9,6 +9,8 @@ export interface Settings {
   automaticUpdates: boolean;
   /** The one-time explanation of automatic updates has been shown, or answered. */
   updateNoticeSeen: boolean;
+  /** Reopen the documents that were open in tabs when the app was last closed. */
+  restoreTabs: boolean;
 }
 
 export const THEME_PREFERENCES: readonly ThemePreference[] = ['system', 'light', 'dark'];
@@ -18,6 +20,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   zoom: DEFAULT_ZOOM,
   automaticUpdates: true,
   updateNoticeSeen: false,
+  restoreTabs: true,
 };
 
 const PATCH_KEYS: ReadonlySet<string> = new Set([
@@ -25,6 +28,7 @@ const PATCH_KEYS: ReadonlySet<string> = new Set([
   'zoom',
   'automaticUpdates',
   'updateNoticeSeen',
+  'restoreTabs',
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -59,6 +63,7 @@ export function normalizeSettings(input: unknown): Settings {
     updateNoticeSeen: isBoolean(source.updateNoticeSeen)
       ? source.updateNoticeSeen
       : DEFAULT_SETTINGS.updateNoticeSeen,
+    restoreTabs: isBoolean(source.restoreTabs) ? source.restoreTabs : DEFAULT_SETTINGS.restoreTabs,
   };
 }
 
@@ -86,6 +91,10 @@ export function parseSettingsPatch(input: unknown): Partial<Settings> | null {
   if ('updateNoticeSeen' in input) {
     if (!isBoolean(input.updateNoticeSeen)) return null;
     patch.updateNoticeSeen = input.updateNoticeSeen;
+  }
+  if ('restoreTabs' in input) {
+    if (!isBoolean(input.restoreTabs)) return null;
+    patch.restoreTabs = input.restoreTabs;
   }
   return patch;
 }

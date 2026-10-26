@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, normalizeSettings, parseSettingsPatch } from './settings';
 
-const DEFAULTS = { theme: 'system', zoom: 1, automaticUpdates: true, updateNoticeSeen: false };
+const DEFAULTS = {
+  theme: 'system',
+  zoom: 1,
+  automaticUpdates: true,
+  updateNoticeSeen: false,
+  restoreTabs: true,
+};
 
 describe('normalizeSettings', () => {
   it.each([undefined, null, 42, 'dark', [], true])('falls back to defaults for %j', (input) => {
@@ -67,7 +73,28 @@ describe('normalizeSettings', () => {
         zoom: 2,
         automaticUpdates: true,
         updateNoticeSeen: false,
+        restoreTabs: true,
       });
+    });
+  });
+
+  describe('reopening the tabs', () => {
+    it('is on by default', () => {
+      expect(DEFAULT_SETTINGS.restoreTabs).toBe(true);
+    });
+
+    it('keeps the switch when it is a boolean', () => {
+      expect(normalizeSettings({ restoreTabs: false })).toEqual({
+        ...DEFAULTS,
+        restoreTabs: false,
+      });
+      expect(normalizeSettings({ restoreTabs: true })).toEqual(DEFAULTS);
+    });
+
+    it('replaces a switch that is not a boolean with its default', () => {
+      expect(normalizeSettings({ restoreTabs: 'off' })).toEqual(DEFAULTS);
+      expect(normalizeSettings({ restoreTabs: 0 })).toEqual(DEFAULTS);
+      expect(normalizeSettings({ restoreTabs: null })).toEqual(DEFAULTS);
     });
   });
 });
@@ -96,6 +123,11 @@ describe('parseSettingsPatch', () => {
     });
   });
 
+  it('accepts the switch for reopening the tabs', () => {
+    expect(parseSettingsPatch({ restoreTabs: false })).toEqual({ restoreTabs: false });
+    expect(parseSettingsPatch({ restoreTabs: true })).toEqual({ restoreTabs: true });
+  });
+
   it.each([
     ['a string', 'dark'],
     ['an array', [{ theme: 'dark' }]],
@@ -109,6 +141,12 @@ describe('parseSettingsPatch', () => {
     ['a number instead of the updates switch', { automaticUpdates: 1 }],
     ['a null instead of the notice switch', { updateNoticeSeen: null }],
     ['a text instead of the notice switch', { updateNoticeSeen: 'true' }],
+    ['a text instead of the tabs switch', { restoreTabs: 'false' }],
+    ['a number instead of the tabs switch', { restoreTabs: 0 }],
+    // The list of open documents is the main process's own: the page may switch reopening on or
+    // off, and may never write a path into the settings.
+    ['a list of tabs', { restoreTabs: true, tabs: ['C:\\private\\notes.md'] }],
+    ['a list of paths', { openDocuments: ['C:\\private\\notes.md'] }],
   ])('rejects %s', (_label, input) => {
     expect(parseSettingsPatch(input)).toBeNull();
   });

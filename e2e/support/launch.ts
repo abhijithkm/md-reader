@@ -62,7 +62,10 @@ export interface RunningApp {
   exited: Promise<number | null>;
   /** Everything the app wrote to stdout and stderr so far. */
   output(): string;
-  /** Closes the window the way a user would (Ctrl+W) and waits for the process to end. */
+  /**
+   * Closes the window the way a user would (Ctrl+Shift+W, which leaves the tabs as they are, where
+   * Ctrl+W would close the one on screen) and waits for the process to end.
+   */
   close(): Promise<void>;
   /** Ends the process immediately. */
   kill(): Promise<void>;
@@ -181,7 +184,7 @@ async function launchOnce(options: LaunchOptions): Promise<RunningApp> {
       output: () => chunks.join(''),
       kill,
       close: async () => {
-        await page.keyboard.press('Control+w').catch(() => undefined);
+        await page.keyboard.press('Control+Shift+W').catch(() => undefined);
         const winner = await Promise.race([
           exited,
           new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 10_000)),

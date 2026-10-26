@@ -53,8 +53,13 @@ const REQUIRED: readonly (readonly [string, string, number])[] = [
   ['--text-muted', '--surface-document', 4.5],
   ['--text-muted', '--surface-app', 4.5],
   ['--text-muted', '--surface-code', 4.5],
+  // The tabs and the settings menu: a tab that is hovered, and the menu that opens over the page.
+  ['--text-muted', '--surface-hover', 4.5],
+  ['--text', '--surface-raised', 7],
+  ['--text-muted', '--surface-raised', 4.5],
   ['--link', '--surface-document', 4.5],
   ['--accent', '--surface-app', 3],
+  ['--accent', '--surface-document', 3],
   // The marks of the source in the margin are decoration, but they are meant to be seen.
   ['--ghost', '--surface-document', 3],
   ['--ghost', '--surface-code', 3],

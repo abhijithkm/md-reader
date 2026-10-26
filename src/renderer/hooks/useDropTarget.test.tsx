@@ -60,35 +60,44 @@ describe('useDropTarget', () => {
   });
 
   it('hands the dropped file over and stops showing the drop hint', () => {
-    const onDropFile = vi.fn();
-    const { result } = renderHook(() => useDropTarget(onDropFile));
+    const onDropFiles = vi.fn();
+    const { result } = renderHook(() => useDropTarget(onDropFiles));
     const dropped = file('notes.md');
 
     fire(dragEvent('dragenter', [dropped]));
     fire(dragEvent('drop', [dropped]));
 
-    expect(onDropFile).toHaveBeenCalledExactlyOnceWith(dropped);
+    expect(onDropFiles).toHaveBeenCalledExactlyOnceWith([dropped]);
     expect(result.current.dragging).toBe(false);
   });
 
-  it('prefers a Markdown file when several are dropped', () => {
-    const onDropFile = vi.fn();
-    renderHook(() => useDropTarget(onDropFile));
-    const markdown = file('readme.md');
+  it('hands over every Markdown file when several are dropped, in order, and leaves the others', () => {
+    const onDropFiles = vi.fn();
+    renderHook(() => useDropTarget(onDropFiles));
+    const readme = file('readme.md');
+    const other = file('other.markdown');
 
-    fire(dragEvent('drop', [file('photo.png'), markdown, file('other.markdown')]));
+    fire(dragEvent('drop', [file('photo.png'), readme, file('notes.txt'), other]));
 
-    expect(onDropFile).toHaveBeenCalledExactlyOnceWith(markdown);
+    expect(onDropFiles).toHaveBeenCalledExactlyOnceWith([readme, other]);
   });
 
-  it('opens the first file when none is Markdown so the user hears why it cannot be opened', () => {
-    const onDropFile = vi.fn();
-    renderHook(() => useDropTarget(onDropFile));
+  it('hands over the first file when none is Markdown so the user hears why it cannot be opened', () => {
+    const onDropFiles = vi.fn();
+    renderHook(() => useDropTarget(onDropFiles));
     const first = file('photo.png');
 
     fire(dragEvent('drop', [first, file('notes.txt')]));
 
-    expect(onDropFile).toHaveBeenCalledExactlyOnceWith(first);
+    expect(onDropFiles).toHaveBeenCalledExactlyOnceWith([first]);
+  });
+
+  it('does not show the drop hint for a tab being dragged along the row', () => {
+    const { result } = renderHook(() => useDropTarget(vi.fn()));
+
+    fire(dragEvent('dragenter', [], ['application/x-mdreader-tab']));
+
+    expect(result.current.dragging).toBe(false);
   });
 
   it('ignores a drop with no files', () => {

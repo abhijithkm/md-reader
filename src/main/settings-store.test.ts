@@ -20,7 +20,13 @@ async function readJson(target: string): Promise<unknown> {
   return JSON.parse(await readFile(target, 'utf8')) as unknown;
 }
 
-const DEFAULTS = { theme: 'system', zoom: 1, automaticUpdates: true, updateNoticeSeen: false };
+const DEFAULTS = {
+  theme: 'system',
+  zoom: 1,
+  automaticUpdates: true,
+  updateNoticeSeen: false,
+  restoreTabs: true,
+};
 
 describe('SettingsStore', () => {
   it('starts with the defaults when no file exists yet', () => {
@@ -56,7 +62,16 @@ describe('SettingsStore', () => {
       zoom: 1.5,
       automaticUpdates: true,
       updateNoticeSeen: false,
+      restoreTabs: true,
     });
+  });
+
+  it('remembers the choice to stop reopening the tabs for the next run', async () => {
+    const first = new SettingsStore(file);
+    first.load();
+    await first.update({ restoreTabs: false });
+
+    expect(new SettingsStore(file).load()).toEqual({ ...DEFAULTS, restoreTabs: false });
   });
 
   it('merges an update into the existing values', async () => {
