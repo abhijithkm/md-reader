@@ -20,7 +20,7 @@
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   height: var(--toolbar-height);
   padding: 0 12px;
   background: var(--surface-app);
@@ -30,29 +30,66 @@
 .toolbar-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
+/* The document leads: its name in the display face, and the folder it lives in beside it. */
 .toolbar-title {
+  display: flex;
   flex: 1;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.toolbar-name {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  text-align: center;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
+  font: 600 15px/1.25 var(--font-display);
+  letter-spacing: 0.005em;
+}
+
+/* The folder gives way first when there is not room for both. */
+.toolbar-folder {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font: 12px/1.25 var(--font-mono);
 }
 
 .toolbar-divider {
   width: 1px;
   height: 20px;
-  margin: 0 6px;
+  margin: 0 8px;
   background: var(--border-strong);
 }
 
+/* Zoom reads as one control: smaller, value, larger, and back to normal. */
+.toolbar-zoom {
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+
+.toolbar-zoom .icon-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
 .zoom-value {
-  min-width: 48px;
+  min-width: 52px;
   text-align: center;
+  font: 12.5px/1 var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
 }
@@ -66,8 +103,10 @@
   height: 32px;
   padding: 0 14px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: var(--surface-raised);
+  /* Controls are set in the interface face, also where they sit inside a document-styled page. */
+  font: 500 14px/1 var(--font-ui);
   cursor: pointer;
 }
 
@@ -91,12 +130,14 @@
 }
 
 .button-primary {
-  height: 36px;
-  padding: 0 20px;
+  height: 40px;
+  padding: 0 24px;
   border-color: var(--accent-solid);
   background: var(--accent-solid);
   color: var(--on-accent-solid);
+  font-size: 15px;
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .button-primary:hover {
@@ -111,13 +152,15 @@
   height: 32px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: transparent;
+  color: var(--text-muted);
   cursor: pointer;
 }
 
 .icon-button:hover:not(:disabled) {
   background: var(--surface-hover);
+  color: var(--text);
 }
 
 .icon-button:active:not(:disabled) {
@@ -140,7 +183,7 @@
 
 .crash h1 {
   margin: 0 0 12px;
-  font-size: 1.25rem;
+  font: 700 1.5rem/1.2 var(--font-display);
 }
 
 .crash p {
@@ -151,9 +194,10 @@
 .notice {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px 6px 14px;
+  gap: 12px;
+  padding: 7px 10px 7px 16px;
   border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
 }
 
 .notice-message {
@@ -198,6 +242,7 @@
 
 .notice .icon-button:hover:not(:disabled) {
   background: color-mix(in srgb, currentColor 14%, transparent);
+  color: inherit;
 }
 
 /* ---- Content ----------------------------------------------------------- */
@@ -225,115 +270,80 @@
   zoom: var(--doc-zoom, 1);
   max-width: calc(var(--measure) + 2 * var(--gutter));
   margin: 0 auto;
-  padding: 40px var(--gutter) 96px;
+  padding: 56px var(--gutter) 120px;
 }
 
-/* ---- Empty state ------------------------------------------------------- */
+/* ---- Start screen ------------------------------------------------------ */
 
+/*
+ * The start screen is a document too, set in the same column and the same type, so that the first
+ * page and the pages that follow it look like one thing. Its headings wear the marks of the source
+ * like any other (see markdown.css, whose rules it shares through the markdown-body class).
+ */
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
   height: 100%;
-  padding: 32px 24px;
   overflow-y: auto;
-  text-align: center;
   background: var(--surface-document);
 }
 
-/* In a window too short for everything, the page scrolls; nothing is squeezed to nothing. */
-.empty-state > * {
-  flex-shrink: 0;
+.empty-page {
+  max-width: calc(var(--measure) + 2 * var(--gutter));
+  margin: 0 auto;
+  padding: clamp(32px, 8vh, 88px) var(--gutter) 96px;
 }
 
-/* Auto margins centre the content but never push it out of reach in a short window. */
-.empty-state > :first-child {
-  margin-top: auto;
-}
-
-.empty-state > :last-child {
-  margin-bottom: auto;
-}
-
-.empty-state h1 {
-  margin: 8px 0 0;
-  font: 600 26px/1.25 var(--font-display);
+.empty-page .app-logo {
+  display: block;
+  margin: 0 0 30px;
+  /* The one place the brand colour is a shape, so it gets a soft shadow of its own. */
+  filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--accent-solid) 22%, transparent));
 }
 
 .empty-lead {
-  max-width: 30rem;
-  margin: 0 0 8px;
-  color: var(--text-muted);
-  font-size: 15px;
-  text-wrap: balance;
+  margin: 0 0 1.5em;
+  font-size: 1.08em;
 }
 
-.shortcut-list {
-  display: grid;
-  gap: 6px;
-  margin: 20px 0 0;
-  color: var(--text-muted);
-  text-align: left;
-}
-
-.shortcut-row {
-  display: grid;
-  grid-template-columns: 11.5rem 1fr;
-  align-items: center;
-  gap: 16px;
-}
-
-.shortcut-row dt {
-  text-align: right;
-}
-
-.shortcut-row dd {
-  margin: 0;
-}
-
-.empty-default,
-.empty-updates {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  max-width: 34rem;
-  margin-top: 28px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border);
-}
-
-.empty-default h2,
-.empty-updates h2 {
-  margin: 0;
-  font: 600 14px/1.3 var(--font-display);
-}
-
-.empty-default p,
-.empty-updates p {
-  margin: 0;
-  color: var(--text-muted);
-}
-
-/* Updates sit below the default-app hint and take less room than it. */
-.empty-updates {
-  gap: 6px;
-  width: 100%;
-  margin-top: 20px;
-  padding-top: 16px;
-}
-
-/* The version and what updating is doing share one line. */
-.empty-updates-line {
+.empty-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  align-items: center;
+  gap: 12px;
 }
 
-.empty-updates-line > * + *::before {
-  content: '\00b7';
-  margin: 0 8px;
+.empty-page section > p {
+  margin: 0 0 0.9em;
+}
+
+/* Keys and what they do, as a plain two-column list. */
+.empty-page .shortcut-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 10px 22px;
+  margin: 0 0 1.1em;
+  padding: 0;
+}
+
+.empty-page .shortcut-row {
+  display: contents;
+}
+
+.empty-page .shortcut-row dt {
+  margin: 0;
+  font-weight: 400;
+}
+
+.empty-page .shortcut-row dd {
+  margin: 0;
+}
+
+/* The version is a label above what updating is doing, the same in every state. */
+.empty-updates-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 0.9em;
 }
 
 .empty-updates-version,
@@ -341,12 +351,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+.empty-updates-version {
+  color: var(--text-muted);
+  font: 13px/1.4 var(--font-mono);
+}
+
 .empty-updates-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 8px;
-  margin-top: 4px;
 }
 
 /* ---- Status bar -------------------------------------------------------- */
@@ -354,27 +367,28 @@
 .statusbar {
   display: flex;
   align-items: center;
+  gap: 18px;
   height: var(--statusbar-height);
-  padding: 0 14px;
+  padding: 0 16px;
   overflow: hidden;
   border-top: 1px solid var(--border);
   background: var(--surface-app);
   color: var(--text-muted);
-  font-size: 12px;
+  font: 11.5px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.statusbar-item + .statusbar-item::before {
-  content: '\00b7';
-  margin: 0 8px;
-}
-
+/* The name leads, in the interface face, and the numbers follow it at the other edge. */
 .statusbar-name {
   flex-shrink: 1;
   min-width: 0;
+  margin-right: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 12px;
 }
 
 /* ---- Drag and drop ----------------------------------------------------- */
@@ -385,10 +399,10 @@
   z-index: 10;
   display: grid;
   place-items: center;
-  margin: 8px;
+  margin: 12px;
   border: 2px dashed var(--accent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--surface-document) 86%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-document) 88%, transparent);
   pointer-events: none;
 }
 
@@ -396,19 +410,20 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--text);
-  font: 600 18px/1.3 var(--font-display);
+  font: 600 20px/1.3 var(--font-display);
 }
 
 /* ---- Narrow windows ---------------------------------------------------- */
 
 @media (max-width: 720px) {
   .toolbar {
-    gap: 8px;
+    gap: 6px;
     padding: 0 8px;
   }
 
+  .toolbar-folder,
   .button-label {
     display: none;
   }
@@ -419,22 +434,30 @@
 
   .document {
     --gutter: 20px;
-    padding-top: 24px;
+
+    padding-top: 28px;
   }
 
-  .shortcut-row {
+  .empty-page {
+    --gutter: 24px;
+  }
+
+  .empty-page .shortcut-list {
     grid-template-columns: 1fr;
     gap: 2px;
-    text-align: center;
   }
 
-  .shortcut-row dt {
-    text-align: center;
+  .empty-page .shortcut-row dt {
+    margin-top: 10px;
   }
 }
 
 @media (max-width: 560px) {
   .toolbar-divider {
     display: none;
+  }
+
+  .zoom-value {
+    min-width: 44px;
   }
 }

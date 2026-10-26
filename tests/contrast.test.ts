@@ -55,6 +55,10 @@ const REQUIRED: readonly (readonly [string, string, number])[] = [
   ['--text-muted', '--surface-code', 4.5],
   ['--link', '--surface-document', 4.5],
   ['--accent', '--surface-app', 3],
+  // The marks of the source in the margin are decoration, but they are meant to be seen.
+  ['--ghost', '--surface-document', 3],
+  ['--ghost', '--surface-code', 3],
+  ['--text', '--highlight', 7],
   ['--focus', '--surface-document', 3],
   ['--focus', '--surface-app', 3],
   ['--on-accent-solid', '--accent-solid', 4.5],

@@ -6,7 +6,7 @@ A small, fast, offline Markdown reader for Windows 10 and 11. Double-click a `.m
 
 ![MD Reader showing a document in the light theme](docs/screenshots/document-light.png)
 
-MD Reader is a reader, not an editor. It opens one document at a time, renders it the way GitHub would, and gets out of the way. It has no account and no telemetry. The installed app looks on GitHub for a newer version and keeps itself up to date (you can [switch that off](#updates)). It treats every document as untrusted: scripts in a Markdown file cannot run, and a document cannot read your files. The only network requests a document can cause are for `https` images it links to.
+MD Reader is a reader, not an editor. It opens one document at a time, renders GitHub Flavored Markdown as a page made for reading, and gets out of the way. It has no account and no telemetry. The installed app looks on GitHub for a newer version and keeps itself up to date (you can [switch that off](#updates)). It treats every document as untrusted: scripts in a Markdown file cannot run, and a document cannot read your files. The only network requests a document can cause are for `https` images it links to.
 
 - [Features](#features)
 - [Screenshots](#screenshots)
@@ -24,6 +24,7 @@ MD Reader is a reader, not an editor. It opens one document at a time, renders i
 ## Features
 
 - **Complete Markdown.** Headings, emphasis, lists, task lists, GitHub Flavored Markdown tables, strikethrough, footnotes, block quotes, horizontal rules, links and images. Unicode text in any script.
+- **A page made for reading.** A serif drawn for screens, headings in a narrower sans, and a line about 70 characters wide. The marks of the Markdown source (`#` to `######`, `>`, a code fence, `---`, and the `-` or number of each list item) hang quietly in the margin, so the level of a heading is clear at a glance. They are never selected, copied or read out, and a narrow window leaves them out. The start screen is set the same way. The fonts are the ones Windows ships (Sitka Text, Bahnschrift, Segoe UI Variable and Cascadia Mono), so nothing is downloaded.
 - **Syntax highlighting** for fenced code blocks: the common web, systems and scripting languages, JSON, YAML, SQL, diff, plus PowerShell, batch, Dockerfile, HTTP and nginx.
 - **Safe inline HTML.** `<details>`, `<kbd>`, `<img>`, tables and similar elements render. Scripts, event handlers, frames, forms and styles are removed.
 - **Relative images and links** resolve against the document's folder, not the app's. Links to other Markdown files open in the same window and Back returns you; `#heading` links scroll; web and mail links open in your default browser.
@@ -39,9 +40,9 @@ MD Reader is a reader, not an editor. It opens one document at a time, renders i
 
 These are captured from the packaged application by [`e2e/screenshots.e2e.test.ts`](e2e/screenshots.e2e.test.ts) and show the window contents (without the Windows title bar). The document is [`docs/sample.md`](docs/sample.md).
 
-|                                                              Start screen                                                              |                                  Dark theme                                  |
-| :------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------: |
-| ![The start screen, with the Open button, keyboard shortcuts and a hint for setting the default app](docs/screenshots/empty-state.png) | ![The sample document in the dark theme](docs/screenshots/document-dark.png) |
+|                                                                                Start screen                                                                                 |                                  Dark theme                                  |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------: |
+| ![The start screen, set like a document: the Open button, keyboard shortcuts, a hint for setting the default app and the Updates section](docs/screenshots/empty-state.png) | ![The sample document in the dark theme](docs/screenshots/document-dark.png) |
 
 |                                              A narrow window                                              |                                                                Everything the sample document contains                                                                 |
 | :-------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------: |

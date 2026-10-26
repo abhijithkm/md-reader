@@ -22,6 +22,15 @@ export interface ToolbarProps {
 const EPSILON = 1e-6;
 const ICON = { size: 18, strokeWidth: 1.75 } as const;
 
+/** The name of the folder that holds the file, which tells apart documents that share a name. */
+function folderName(filePath: string | undefined): string | undefined {
+  if (filePath === undefined) return undefined;
+  return filePath
+    .split(/[\\/]/)
+    .filter((part) => part !== '')
+    .at(-2);
+}
+
 interface IconButtonProps {
   label: string;
   shortcut?: string;
@@ -62,6 +71,7 @@ export function Toolbar({
   onResetZoom,
 }: ToolbarProps) {
   const nextTheme = theme === 'light' ? 'dark' : 'light';
+  const folder = folderName(filePath);
 
   return (
     <header className="toolbar">
@@ -86,8 +96,15 @@ export function Toolbar({
         </IconButton>
       </div>
 
-      <div className="toolbar-title" title={filePath}>
-        {fileName ?? 'MD Reader'}
+      <div className="toolbar-title">
+        <span className="toolbar-name" title={filePath}>
+          {fileName ?? 'MD Reader'}
+        </span>
+        {folder !== undefined && (
+          <span className="toolbar-folder" title={filePath}>
+            {folder}
+          </span>
+        )}
       </div>
 
       <div className="toolbar-group">

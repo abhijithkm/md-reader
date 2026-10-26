@@ -61,6 +61,6 @@ describe('saved settings', () => {
     const background = await app.page.evaluate(
       () => getComputedStyle(document.body).backgroundColor,
     );
-    expect(background).toBe('rgb(31, 31, 31)');
+    expect(background).toBe('rgb(15, 20, 26)');
   });
 });

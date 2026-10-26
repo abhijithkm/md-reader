@@ -36,6 +36,25 @@ describe('Toolbar', () => {
     expect(screen.getByText('MD Reader')).toBeInTheDocument();
   });
 
+  // Documents often share a name (README.md), and the folder is what tells them apart.
+  it('names the folder that holds the document next to its name', () => {
+    renderToolbar({ filePath: 'C:\\projects\\md-reader\\README.md' });
+    expect(screen.getByText('md-reader')).toHaveAttribute(
+      'title',
+      'C:\\projects\\md-reader\\README.md',
+    );
+  });
+
+  it('finds the folder whichever way the path is written', () => {
+    renderToolbar({ filePath: 'C:/projects/notes/README.md' });
+    expect(screen.getByText('notes')).toBeInTheDocument();
+  });
+
+  it('names no folder when no document is open', () => {
+    renderToolbar({ fileName: undefined, filePath: undefined });
+    expect(document.querySelector('.toolbar-folder')).toBeNull();
+  });
+
   it('opens a file', async () => {
     const { props, user } = renderToolbar();
     await user.click(screen.getByRole('button', { name: 'Open file' }));

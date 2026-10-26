@@ -66,4 +66,22 @@ describe('EmptyState', () => {
     expect(screen.getByText('Ctrl+O')).toBeInTheDocument();
     expect(screen.getByText('F5')).toBeInTheDocument();
   });
+
+  // The start screen is set like a document: its headings carry the marks in the margin, and the
+  // sections are named, so that a screen reader can move through it by heading.
+  it('is laid out as a document, with the shortcuts under a heading of their own', () => {
+    const { container } = render(<EmptyState onOpen={vi.fn()} onOpenDefaultApps={vi.fn()} />);
+
+    expect(container.querySelector('.empty-page')).toHaveClass('markdown-body');
+    expect(
+      screen.getAllByRole('heading').map((heading) => [heading.tagName, heading.textContent]),
+    ).toEqual([
+      ['H1', 'Open a Markdown file'],
+      ['H2', 'Keyboard'],
+      ['H2', 'Make MD Reader the default app for Markdown'],
+    ]);
+    expect(screen.getByRole('region', { name: 'Keyboard' })).toContainElement(
+      screen.getByText('Ctrl+O'),
+    );
+  });
 });

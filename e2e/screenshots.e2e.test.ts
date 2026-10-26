@@ -16,9 +16,9 @@ let workspace: Workspace;
 let userDataDir: string;
 let app: RunningApp | undefined;
 
-/** Parks the pointer on the document first, so no button is shown in its hover state. */
+/** Parks the pointer in the empty margin first, so no button is shown in its hover state. */
 async function capture(page: Page, fileName: string): Promise<void> {
-  await page.mouse.move(300, 400);
+  await page.mouse.move((page.viewportSize()?.width ?? 1100) - 40, 360);
   await page.screenshot({ path: path.join(outputDir, fileName) });
 }
 
@@ -37,7 +37,10 @@ afterEach(async () => {
 describe.runIf(enabled)('screenshots', () => {
   it('captures the empty state, a document in light and dark, and a narrow window', async () => {
     await mkdir(outputDir, { recursive: true });
-    const sample = path.join(workspace.root, 'Welcome to MD Reader.md');
+    // In a folder with a plain name, because the toolbar shows the name of the folder.
+    const folder = path.join(workspace.root, 'Documents');
+    await mkdir(folder, { recursive: true });
+    const sample = path.join(folder, 'Welcome to MD Reader.md');
     await copyFile(path.join(process.cwd(), 'docs', 'sample.md'), sample);
 
     // Empty state, light theme (the default for a fresh profile follows the OS; force light). The
@@ -56,7 +59,7 @@ describe.runIf(enabled)('screenshots', () => {
     });
     const { page } = app;
     // Tall enough for the whole start screen, including the Updates section at the bottom.
-    await page.setViewportSize({ width: 1100, height: 880 });
+    await page.setViewportSize({ width: 1100, height: 1280 });
     await page.getByRole('heading', { name: 'Open a Markdown file' }).waitFor();
     // Only a packaged build has one; a development build starts with updates unavailable.
     await page

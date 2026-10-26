@@ -4,54 +4,68 @@
  *
  * Colours that carry text are written as #rrggbb so they can be checked.
  * --surface-document must match WINDOW_BACKGROUND in src/shared/theme.ts.
+ *
+ * The look: blue-black ink on cool paper, with one brand blue for actions and links, and one
+ * warm tone (--ghost) that is used for a single job: the marks of the Markdown source that hang
+ * in the margin of a document (see markdown.css).
  */
 
 :root {
+  /* Everything below ships with Windows 10 and 11, so nothing is downloaded or bundled. */
   --font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
-  --font-display:
-    'Segoe UI Variable Display', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  /* Headings and the few big words: a DIN-like face with a narrower cut for long titles. */
+  --font-display: 'Bahnschrift', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  /* Body text: a serif drawn for reading on screens. */
+  --font-reading: 'Sitka Text', Cambria, Georgia, 'Times New Roman', serif;
+  /* Code, and everything that is source: the marks in the margin, numbers, shortcuts. */
   --font-mono: 'Cascadia Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
 
   --radius-sm: 4px;
   --radius: 6px;
-  --radius-lg: 8px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
 
-  --toolbar-height: 48px;
+  --toolbar-height: 44px;
   --statusbar-height: 28px;
-  /* Width of the reading column; roughly 85 characters of body text. */
-  --measure: 45rem;
-  --gutter: 40px;
+  /* Width of the reading column: about 72 characters of body text. */
+  --measure: 36.5rem;
+  /* Room on each side of the column. The marks of the source hang into it. */
+  --gutter: 64px;
 }
 
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --surface-app: #f3f3f3;
-  --surface-document: #ffffff;
+  --surface-app: #eef1f4;
+  --surface-document: #f9fafb;
   --surface-raised: #ffffff;
-  --surface-hover: #e9e9e9;
-  --surface-active: #dcdcdc;
-  --surface-code: #f6f6f6;
+  --surface-hover: #e3e8ed;
+  --surface-active: #d6dde4;
+  --surface-code: #eff3f6;
 
-  --border: #e0e0e0;
-  --border-strong: #c7c7c7;
+  --border: #dde3e8;
+  --border-strong: #bcc6cf;
 
-  --text: #1a1a1a;
-  --text-muted: #5c5c5c;
+  --text: #121c26;
+  --text-muted: #4a5967;
 
-  --link: #0f6cbd;
+  --link: #0b5cad;
   --accent: #0f6cbd;
   --accent-solid: #0f6cbd;
-  --accent-solid-hover: #115ea3;
+  --accent-solid-hover: #0c5a9d;
   --on-accent-solid: #ffffff;
   --focus: #0f6cbd;
 
-  --danger-bg: #fde7e9;
-  --danger-border: #f1bbbc;
-  --danger-text: #a4262c;
-  --info-bg: #eaf3fb;
-  --info-border: #bcd7ef;
+  /* The marks of the Markdown source in the margin: seen, never loud. */
+  --ghost: #b8741a;
+  --highlight: #ffe58f;
+
+  --danger-bg: #fde9ea;
+  --danger-border: #f0bcbe;
+  --danger-text: #9f1d24;
+  --info-bg: #e8f1fa;
+  --info-border: #b9d3ea;
   --info-text: #0b4a7d;
 
   --hl-comment: #57606a;
@@ -66,31 +80,34 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --surface-app: #2b2b2b;
-  --surface-document: #1f1f1f;
-  --surface-raised: #333333;
-  --surface-hover: #3a3a3a;
-  --surface-active: #454545;
-  --surface-code: #2a2a2a;
+  --surface-app: #171d25;
+  --surface-document: #0f141a;
+  --surface-raised: #1f2731;
+  --surface-hover: #26303b;
+  --surface-active: #303c49;
+  --surface-code: #161c24;
 
-  --border: #3d3d3d;
-  --border-strong: #5a5a5a;
+  --border: #252e39;
+  --border-strong: #3a4755;
 
-  --text: #f0f0f0;
-  --text-muted: #b3b3b3;
+  --text: #dde5ec;
+  --text-muted: #9dabb9;
 
-  --link: #479ef5;
-  --accent: #479ef5;
+  --link: #6cb4ff;
+  --accent: #6cb4ff;
   --accent-solid: #0f6cbd;
   --accent-solid-hover: #115ea3;
   --on-accent-solid: #ffffff;
-  --focus: #479ef5;
+  --focus: #6cb4ff;
 
-  --danger-bg: #442726;
-  --danger-border: #6e3b3a;
-  --danger-text: #ffb4b4;
-  --info-bg: #1c3347;
-  --info-border: #2c4f6e;
+  --ghost: #d9a24b;
+  --highlight: #4e3f0e;
+
+  --danger-bg: #3a2022;
+  --danger-border: #6a3a3c;
+  --danger-text: #ffb8b8;
+  --info-bg: #162a3d;
+  --info-border: #2a4a68;
   --info-text: #b6dcff;
 
   --hl-comment: #9198a1;
