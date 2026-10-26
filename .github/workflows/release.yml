@@ -63,6 +63,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      # npm does not run Electron's install script here (it warns that install scripts are skipped), so
+      # the Electron binary that a development build starts is fetched explicitly.
+      - name: Download Electron
+        run: node node_modules/electron/install.js
+
       # Only a development build honours a feed served from this computer; the packaged app never
       # does. So this is where the whole update flow is tried for real: find, download, check the
       # hash, announce, switch off. It starts the app from the repository, which needs the build above.
