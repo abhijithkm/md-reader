@@ -1,19 +1,55 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MdReaderApi } from '../shared/ipc';
+import type { Settings } from '../shared/settings';
+import type { UpdateState } from '../shared/updates';
 import { DocumentView, type DocumentStats } from './components/DocumentView';
 import { DropOverlay } from './components/DropOverlay';
 import { EmptyState } from './components/EmptyState';
 import { NoticeBar } from './components/NoticeBar';
 import { StatusBar } from './components/StatusBar';
 import { Toolbar } from './components/Toolbar';
+import { UpdateNotice, type UpdateNoticeContent } from './components/UpdateNotice';
 import { useDocument } from './hooks/useDocument';
 import { useDropTarget } from './hooks/useDropTarget';
 import { useSettings } from './hooks/useSettings';
 import { useShortcuts } from './hooks/useShortcuts';
+import { useUpdates } from './hooks/useUpdates';
 import type { LinkActions } from './markdown/MarkdownRenderer';
 
 const LINK_FAILED = 'That link could not be opened.';
 const SETTINGS_FAILED = 'Windows Settings could not be opened.';
+
+interface ChosenUpdateNotice {
+  /** Changes with the message, so a dismissed message stays away only until the next one. */
+  key: string;
+  content: UpdateNoticeContent;
+}
+
+/**
+ * Which message about updating to show, if any: the explanation until it has been read, then a
+ * downloaded update, then a newer version that this copy cannot install itself.
+ */
+function chooseUpdateNotice(
+  state: UpdateState | undefined,
+  settings: Settings,
+  dismissed: string | undefined,
+  installs: boolean | undefined,
+): ChosenUpdateNotice | undefined {
+  if (state === undefined || state.status === 'unavailable') return undefined;
+  if (!settings.updateNoticeSeen && settings.automaticUpdates) {
+    // What this copy does with a new version is part of the explanation, so wait until it is known
+    // rather than say something that may be wrong.
+    return installs === undefined
+      ? undefined
+      : { key: 'intro', content: { kind: 'intro', installs } };
+  }
+  if (state.status === 'ready' || state.status === 'available') {
+    const key = `${state.status}:${state.version}`;
+    if (key === dismissed) return undefined;
+    return { key, content: { kind: state.status, version: state.version } };
+  }
+  return undefined;
+}
 
 interface CountedStats {
   /** Identifies the document the numbers belong to, so stale numbers are never shown. */
@@ -23,6 +59,8 @@ interface CountedStats {
 
 export function App({ bridge }: { bridge: MdReaderApi }) {
   const settings = useSettings(bridge);
+  const updates = useUpdates(bridge);
+  const [dismissedUpdate, setDismissedUpdate] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLElement | null>(null);
   const getScrollTop = useCallback(() => scrollRef.current?.scrollTop ?? 0, []);
   const documents = useDocument(bridge, { getScrollTop });
@@ -65,6 +103,25 @@ export function App({ bridge }: { bridge: MdReaderApi }) {
     }),
     [bridge, openLink, report],
   );
+
+  const updateNotice = chooseUpdateNotice(
+    updates.state,
+    settings.settings,
+    dismissedUpdate,
+    updates.installsUpdates,
+  );
+  const updatesPanel =
+    updates.state === undefined || updates.state.status === 'unavailable'
+      ? undefined
+      : {
+          state: updates.state,
+          version: updates.version,
+          installs: updates.installsUpdates ?? true,
+          onCheck: updates.checkNow,
+          onSetEnabled: settings.setAutomaticUpdates,
+          onRestart: updates.restartNow,
+          onOpenPage: actions.openExternal,
+        };
 
   const handleDrop = useCallback(
     (file: File) => {
@@ -119,6 +176,26 @@ export function App({ bridge }: { bridge: MdReaderApi }) {
         onResetZoom={settings.resetZoom}
       />
       <NoticeBar notice={documents.notice} onDismiss={documents.dismissNotice} />
+      {updateNotice !== undefined && (
+        <UpdateNotice
+          key={updateNotice.key}
+          notice={updateNotice.content}
+          onKeepOn={() => {
+            settings.dismissUpdateNotice(false);
+          }}
+          onTurnOff={() => {
+            settings.dismissUpdateNotice(true);
+          }}
+          onRestart={updates.restartNow}
+          onOpenPage={() => {
+            if (updates.state?.status === 'available')
+              actions.openExternal(updates.state.releaseUrl);
+          }}
+          onDismiss={() => {
+            setDismissedUpdate(updateNotice.key);
+          }}
+        />
+      )}
       <main className="app-main" aria-busy={documents.loading}>
         {current === undefined ? (
           <EmptyState
@@ -130,6 +207,7 @@ export function App({ bridge }: { bridge: MdReaderApi }) {
                 report(SETTINGS_FAILED);
               });
             }}
+            {...(updatesPanel === undefined ? {} : { updates: updatesPanel })}
           />
         ) : (
           <DocumentView

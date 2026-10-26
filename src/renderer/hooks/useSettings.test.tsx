@@ -10,6 +10,13 @@ afterEach(() => {
   delete document.documentElement.dataset['theme'];
 });
 
+const DEFAULTS: Settings = {
+  theme: 'system',
+  zoom: 1,
+  automaticUpdates: true,
+  updateNoticeSeen: false,
+};
+
 /** Controls what the operating system reports for prefers-color-scheme. */
 function mockSystemTheme(dark: boolean) {
   const listeners = new Set<(event: { matches: boolean }) => void>();
@@ -34,7 +41,7 @@ function mockSystemTheme(dark: boolean) {
   };
 }
 
-function createBridge(initial: Settings = { theme: 'system', zoom: 1 }) {
+function createBridge(initial: Settings = DEFAULTS) {
   return {
     getSettings: vi.fn(() => Promise.resolve(initial)),
     updateSettings: vi.fn((patch: Partial<Settings>) => Promise.resolve({ ...initial, ...patch })),
@@ -51,8 +58,8 @@ async function renderLoaded(bridge = createBridge()) {
 
 describe('useSettings', () => {
   it('starts from the settings the app saved last time', async () => {
-    const { result } = await renderLoaded(createBridge({ theme: 'dark', zoom: 1.5 }));
-    expect(result.current.settings).toEqual({ theme: 'dark', zoom: 1.5 });
+    const { result } = await renderLoaded(createBridge({ ...DEFAULTS, theme: 'dark', zoom: 1.5 }));
+    expect(result.current.settings).toEqual({ ...DEFAULTS, theme: 'dark', zoom: 1.5 });
   });
 
   it('falls back to the defaults when the saved settings cannot be read', async () => {
@@ -61,13 +68,13 @@ describe('useSettings', () => {
 
     const { result } = await renderLoaded(bridge);
 
-    expect(result.current.settings).toEqual({ theme: 'system', zoom: 1 });
+    expect(result.current.settings).toEqual(DEFAULTS);
   });
 
   describe('theme', () => {
     it('marks the page with the resolved theme', async () => {
       mockSystemTheme(false);
-      await renderLoaded(createBridge({ theme: 'dark', zoom: 1 }));
+      await renderLoaded(createBridge({ ...DEFAULTS, theme: 'dark' }));
       expect(document.documentElement.dataset['theme']).toBe('dark');
     });
 
@@ -87,7 +94,7 @@ describe('useSettings', () => {
 
     it('ignores operating system changes once a theme was chosen', async () => {
       const system = mockSystemTheme(true);
-      const { result } = await renderLoaded(createBridge({ theme: 'dark', zoom: 1 }));
+      const { result } = await renderLoaded(createBridge({ ...DEFAULTS, theme: 'dark' }));
 
       act(() => {
         system.change(false);
@@ -98,7 +105,7 @@ describe('useSettings', () => {
 
     it('toggles an explicit theme to the other one and saves it', async () => {
       mockSystemTheme(false);
-      const { result, bridge } = await renderLoaded(createBridge({ theme: 'dark', zoom: 1 }));
+      const { result, bridge } = await renderLoaded(createBridge({ ...DEFAULTS, theme: 'dark' }));
 
       act(() => {
         result.current.toggleTheme();
@@ -148,7 +155,7 @@ describe('useSettings', () => {
     });
 
     it('resets to 100%', async () => {
-      const { result, bridge } = await renderLoaded(createBridge({ theme: 'system', zoom: 2 }));
+      const { result, bridge } = await renderLoaded(createBridge({ ...DEFAULTS, zoom: 2 }));
 
       act(() => {
         result.current.resetZoom();
@@ -159,13 +166,13 @@ describe('useSettings', () => {
     });
 
     it('does nothing at the largest and smallest zoom', async () => {
-      const largest = await renderLoaded(createBridge({ theme: 'system', zoom: 3 }));
+      const largest = await renderLoaded(createBridge({ ...DEFAULTS, zoom: 3 }));
       act(() => {
         largest.result.current.zoomIn();
       });
       expect(largest.bridge.updateSettings).not.toHaveBeenCalled();
 
-      const smallest = await renderLoaded(createBridge({ theme: 'system', zoom: 0.5 }));
+      const smallest = await renderLoaded(createBridge({ ...DEFAULTS, zoom: 0.5 }));
       act(() => {
         smallest.result.current.zoomOut();
       });
@@ -173,9 +180,62 @@ describe('useSettings', () => {
     });
   });
 
+  describe('automatic updates', () => {
+    it('are on until the user switches them off', async () => {
+      const { result } = await renderLoaded();
+      expect(result.current.settings.automaticUpdates).toBe(true);
+    });
+
+    it('switch off and on again, and each choice is saved', async () => {
+      const { result, bridge } = await renderLoaded();
+
+      act(() => {
+        result.current.setAutomaticUpdates(false);
+      });
+      expect(result.current.settings.automaticUpdates).toBe(false);
+
+      act(() => {
+        result.current.setAutomaticUpdates(true);
+      });
+      expect(result.current.settings.automaticUpdates).toBe(true);
+
+      expect(bridge.updateSettings.mock.calls).toEqual([
+        [{ automaticUpdates: false }],
+        [{ automaticUpdates: true }],
+      ]);
+    });
+
+    it('remember that the explanation was read', async () => {
+      const { result, bridge } = await renderLoaded();
+
+      act(() => {
+        result.current.dismissUpdateNotice(false);
+      });
+
+      expect(result.current.settings.updateNoticeSeen).toBe(true);
+      expect(result.current.settings.automaticUpdates).toBe(true);
+      expect(bridge.updateSettings).toHaveBeenCalledExactlyOnceWith({ updateNoticeSeen: true });
+    });
+
+    it('switch off in the same step when the user declines the explanation', async () => {
+      const { result, bridge } = await renderLoaded();
+
+      act(() => {
+        result.current.dismissUpdateNotice(true);
+      });
+
+      expect(result.current.settings.updateNoticeSeen).toBe(true);
+      expect(result.current.settings.automaticUpdates).toBe(false);
+      expect(bridge.updateSettings).toHaveBeenCalledExactlyOnceWith({
+        automaticUpdates: false,
+        updateNoticeSeen: true,
+      });
+    });
+  });
+
   it('keeps the change on screen even if saving it fails', async () => {
     mockSystemTheme(false);
-    const bridge = createBridge({ theme: 'dark', zoom: 1 });
+    const bridge = createBridge({ ...DEFAULTS, theme: 'dark' });
     bridge.updateSettings.mockRejectedValue(new Error('disk full'));
     const { result } = await renderLoaded(bridge);
 

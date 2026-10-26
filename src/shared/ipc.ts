@@ -1,5 +1,6 @@
 import type { Settings } from './settings';
 import type { AppInfo, OpenOutcome } from './types';
+import type { UpdateState } from './updates';
 
 /** Every channel the page and the main process talk over. Nothing else is exposed. */
 export const IpcChannel = {
@@ -15,14 +16,19 @@ export const IpcChannel = {
   openExternal: 'external:open',
   openDefaultAppsSettings: 'system:open-default-apps',
   closeWindow: 'window:close',
+  getUpdateState: 'updates:get-state',
+  checkForUpdates: 'updates:check',
+  restartToUpdate: 'updates:restart',
   /** Main to page: a document finished opening (or failed to) outside of a page request. */
   documentOpened: 'document:opened',
+  /** Main to page: what updating is doing changed. */
+  updateState: 'updates:state',
 } as const;
 
 /** Channels the page invokes and the main process answers. */
 export type InvokeChannel = Exclude<
   (typeof IpcChannel)[keyof typeof IpcChannel],
-  typeof IpcChannel.documentOpened
+  typeof IpcChannel.documentOpened | typeof IpcChannel.updateState
 >;
 
 /**
@@ -55,4 +61,12 @@ export interface MdReaderApi {
   openExternal(url: string): Promise<boolean>;
   openDefaultAppsSettings(): Promise<void>;
   closeWindow(): Promise<void>;
+  /** What updating is doing right now. */
+  getUpdateState(): Promise<UpdateState>;
+  /** Looks for a newer version now; resolves with the state once the check has finished. */
+  checkForUpdates(): Promise<UpdateState>;
+  /** Restarts into a downloaded update. Does nothing unless one is ready to install. */
+  restartToUpdate(): Promise<void>;
+  /** Subscribes to changes of the update state; returns an unsubscribe function. */
+  onUpdateState(listener: (state: UpdateState) => void): () => void;
 }

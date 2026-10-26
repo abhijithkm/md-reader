@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { UPDATE_SOURCE } from '../src/shared/updates';
 
 interface BuilderConfig {
   appId: string;
@@ -26,6 +27,8 @@ const pkg = JSON.parse(read('package.json')) as {
   productName: string;
   version: string;
   main: string;
+  scripts?: Record<string, string>;
+  repository?: { url?: string };
   dependencies?: Record<string, string>;
 };
 const installerScript = read('build/installer.nsh');
@@ -70,8 +73,7 @@ describe('release artifacts', () => {
     expect(config.win.requestedExecutionLevel).toBe('asInvoker');
   });
 
-  it('is never published or code-signed from the configuration', () => {
-    expect(config.publish ?? null).toBeNull();
+  it('is never code-signed from the configuration', () => {
     for (const key of [
       'certificateFile',
       'certificatePassword',
@@ -81,6 +83,46 @@ describe('release artifacts', () => {
     ]) {
       expect(config.win, key).not.toHaveProperty(key);
     }
+  });
+});
+
+describe('updates', () => {
+  it('looks for new versions in this repository only, and nowhere else', () => {
+    expect(config.publish).toEqual({
+      provider: 'github',
+      owner: UPDATE_SOURCE.owner,
+      repo: UPDATE_SOURCE.repo,
+    });
+    // The page of the repository is the one named in package.json.
+    expect(pkg.repository?.url).toContain(
+      `github.com/${UPDATE_SOURCE.owner}/${UPDATE_SOURCE.repo}`,
+    );
+  });
+
+  it('never lets electron-builder upload anything: the release workflow does that', () => {
+    for (const script of ['pack', 'dist']) {
+      expect(pkg.scripts?.[script], script).toContain('--publish never');
+    }
+    const workflow = read('.github/workflows/release.yml');
+    const builds = workflow.split('\n').filter((line) => line.includes('electron-builder'));
+    expect(builds.length).toBeGreaterThan(0);
+    for (const line of builds) expect(line, line).toContain('--publish never');
+  });
+
+  // electron-builder reads the name from `win.signtoolOptions` or `win.azureSignOptions`, and the
+  // update library would then accept only an installer signed by it. Nothing is signed yet, so a
+  // name anywhere in the file would stop every installed copy from updating.
+  it('does not pin a publisher name anywhere, because the builds are not code-signed', () => {
+    const keysOf = (value: unknown): string[] =>
+      typeof value === 'object' && value !== null
+        ? Object.entries(value).flatMap(([key, inner]) => [key, ...keysOf(inner)])
+        : [];
+
+    expect(keysOf(config)).not.toContain('publisherName');
+  });
+
+  it('keeps the update library out of the runtime dependencies, because it is compiled into the app', () => {
+    expect(pkg.dependencies ?? {}).not.toHaveProperty('electron-updater');
   });
 });
 
@@ -141,11 +183,25 @@ describe('file associations', () => {
     }
   });
 
-  it('removes the copy of the installer that electron-builder keeps for an updater this app does not have', () => {
-    // The copy is about 100 MB. electron-builder names the folder after the package name.
+  it('keeps the copy of the installer that the updater compares with, and removes it with the program', () => {
+    // The copy is about 100 MB. It lets an update download only what changed. electron-builder
+    // names the folder after the package name.
     const updaterFolder = `${pkg.name.toLowerCase()}-updater`;
-    expect(installerScript).toContain('Delete "$LOCALAPPDATA\\${APP_INSTALLER_STORE_FILE}"');
-    expect(installerScript).toContain(`RMDir /r "$LOCALAPPDATA\\${updaterFolder}"`);
+    expect(installerScript).not.toContain('Delete "$LOCALAPPDATA\\${APP_INSTALLER_STORE_FILE}"');
+    expect(installerScript).toMatch(
+      new RegExp(
+        String.raw`\$\{ifNot\} \$\{isUpdated\}\s+RMDir /r "\$LOCALAPPDATA\\${updaterFolder}"\s+\$\{endIf\}`,
+      ),
+    );
+  });
+
+  it('leaves the updater folder alone while an upgrade runs, because the new installer runs from inside it', () => {
+    const removals = installerScript.split('\n').filter((line) => line.includes('RMDir'));
+    expect(removals).toHaveLength(1);
+    const before = installerScript.slice(0, installerScript.indexOf(removals[0] ?? ''));
+    expect(before.lastIndexOf('${ifNot} ${isUpdated}')).toBeGreaterThan(
+      before.lastIndexOf('${endIf}'),
+    );
   });
 
   it('points each association at an icon that exists', () => {

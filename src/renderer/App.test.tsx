@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MdReaderApi } from '../shared/ipc';
 import type { Settings } from '../shared/settings';
 import type { MarkdownDocument, OpenOutcome } from '../shared/types';
+import type { UpdateState } from '../shared/updates';
 import { App } from './App';
 
 afterEach(() => {
@@ -29,11 +30,26 @@ const opened = (name: string, content: string): OpenOutcome => ({
   document: doc(name, content),
 });
 
-function createBridge(initial: Settings = { theme: 'light', zoom: 1 }) {
+/** What most tests start from: the explanation of updates was already read, so it stays out of the way. */
+const SETTINGS: Settings = {
+  theme: 'light',
+  zoom: 1,
+  automaticUpdates: true,
+  updateNoticeSeen: true,
+};
+
+const NO_UPDATES: UpdateState = { status: 'unavailable', reason: 'disabled' };
+
+function createBridge(
+  initial: Settings = SETTINGS,
+  updateState: UpdateState = NO_UPDATES,
+  installsUpdates = true,
+) {
   let listener: ((outcome: OpenOutcome) => void) | undefined;
+  let updateListener: ((state: UpdateState) => void) | undefined;
   const bridge = {
     getAppInfo: vi.fn(() =>
-      Promise.resolve({ name: 'MD Reader', version: '1.0.0', platform: 'win32' }),
+      Promise.resolve({ name: 'MD Reader', version: '1.0.0', platform: 'win32', installsUpdates }),
     ),
     getSettings: vi.fn(() => Promise.resolve(initial)),
     updateSettings: vi.fn((patch: Partial<Settings>) => Promise.resolve({ ...initial, ...patch })),
@@ -54,6 +70,15 @@ function createBridge(initial: Settings = { theme: 'light', zoom: 1 }) {
     openExternal: vi.fn<MdReaderApi['openExternal']>(() => Promise.resolve(true)),
     openDefaultAppsSettings: vi.fn(() => Promise.resolve()),
     closeWindow: vi.fn(() => Promise.resolve()),
+    getUpdateState: vi.fn((): Promise<UpdateState> => Promise.resolve(updateState)),
+    checkForUpdates: vi.fn((): Promise<UpdateState> => Promise.resolve({ status: 'current' })),
+    restartToUpdate: vi.fn(() => Promise.resolve()),
+    onUpdateState: vi.fn((callback: (state: UpdateState) => void) => {
+      updateListener = callback;
+      return () => {
+        updateListener = undefined;
+      };
+    }),
   } satisfies MdReaderApi;
 
   return {
@@ -63,11 +88,16 @@ function createBridge(initial: Settings = { theme: 'light', zoom: 1 }) {
         listener?.(outcome);
       });
     },
+    pushUpdate(state: UpdateState) {
+      act(() => {
+        updateListener?.(state);
+      });
+    },
   };
 }
 
-async function renderApp(initial?: Settings) {
-  const harness = createBridge(initial);
+async function renderApp(initial?: Settings, updateState?: UpdateState, installsUpdates?: boolean) {
+  const harness = createBridge(initial, updateState, installsUpdates);
   render(<App bridge={harness.bridge} />);
   await screen.findByRole('banner');
   return { ...harness, user: userEvent.setup() };
@@ -155,7 +185,7 @@ describe('App', () => {
 
   describe('theme and zoom', () => {
     it('toggles the theme and remembers it', async () => {
-      const { bridge, user } = await renderApp({ theme: 'light', zoom: 1 });
+      const { bridge, user } = await renderApp({ ...SETTINGS, theme: 'light' });
       expect(document.documentElement.dataset['theme']).toBe('light');
 
       await user.click(screen.getByRole('button', { name: 'Switch to dark theme' }));
@@ -186,7 +216,7 @@ describe('App', () => {
     });
 
     it('starts at the zoom level saved last time', async () => {
-      await renderApp({ theme: 'dark', zoom: 1.5 });
+      await renderApp({ ...SETTINGS, theme: 'dark', zoom: 1.5 });
       expect(screen.getByRole('status')).toHaveTextContent('150%');
       expect(document.documentElement.dataset['theme']).toBe('dark');
     });
@@ -287,6 +317,151 @@ describe('App', () => {
       });
 
       expect(await screen.findByRole('alert')).toBeInTheDocument();
+    });
+  });
+
+  describe('updates', () => {
+    const idle: UpdateState = { status: 'idle' };
+
+    async function renderWithDocument(settings: Settings, state: UpdateState) {
+      const harness = await renderApp(settings, state);
+      harness.push(opened('a.md', '# A'));
+      await screen.findByRole('heading', { name: 'A' });
+      return harness;
+    }
+
+    it('shows nothing about updates in a build that cannot update', async () => {
+      await renderApp({ ...SETTINGS, updateNoticeSeen: false });
+
+      expect(screen.queryByRole('heading', { name: 'Updates' })).toBeNull();
+      expect(screen.queryByText(/no information from your documents or settings/i)).toBeNull();
+    });
+
+    it('lists the version and an Updates section on the start screen, and checks on request', async () => {
+      const { bridge, user } = await renderApp(SETTINGS, idle);
+      expect(await screen.findByRole('heading', { name: 'Updates' })).toBeInTheDocument();
+      expect(await screen.findByText('Version 1.0.0')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Check for updates' }));
+
+      expect(bridge.checkForUpdates).toHaveBeenCalledOnce();
+      expect(await screen.findByText('MD Reader 1.0.0 is up to date.')).toBeInTheDocument();
+    });
+
+    it('switches automatic updates off from the start screen and remembers it', async () => {
+      const { bridge, user } = await renderApp(SETTINGS, idle);
+
+      await user.click(await screen.findByRole('button', { name: 'Turn off automatic updates' }));
+
+      expect(bridge.updateSettings).toHaveBeenCalledExactlyOnceWith({ automaticUpdates: false });
+    });
+
+    it('explains automatic updates once and remembers that it was read', async () => {
+      const { bridge, user } = await renderApp({ ...SETTINGS, updateNoticeSeen: false }, idle);
+      expect(
+        await screen.findByText(
+          /installs them when you close the app.*no information from your documents or settings/i,
+        ),
+      ).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'OK' }));
+
+      expect(bridge.updateSettings).toHaveBeenCalledExactlyOnceWith({ updateNoticeSeen: true });
+      expect(screen.queryByText(/no information from your documents or settings/i)).toBeNull();
+    });
+
+    it('explains it differently to a copy that only reports a newer version', async () => {
+      await renderApp({ ...SETTINGS, updateNoticeSeen: false }, idle, false);
+
+      const notice = await screen.findByRole('status', { name: 'Update notice' });
+
+      expect(notice).toHaveTextContent(/tells you when one is available/i);
+      expect(notice).not.toHaveTextContent(/install/i);
+      expect(await screen.findByText('Automatic update checks are on.')).toBeInTheDocument();
+    });
+
+    it('waits to explain updates until it is known what this copy does with a new version', async () => {
+      const harness = createBridge({ ...SETTINGS, updateNoticeSeen: false }, idle);
+      harness.bridge.getAppInfo.mockReturnValue(new Promise(() => undefined));
+      render(<App bridge={harness.bridge} />);
+      await screen.findByRole('banner');
+
+      await screen.findByRole('heading', { name: 'Updates' });
+
+      expect(screen.queryByRole('status', { name: 'Update notice' })).toBeNull();
+    });
+
+    it('lets the reader decline from that explanation', async () => {
+      const { bridge, user } = await renderApp({ ...SETTINGS, updateNoticeSeen: false }, idle);
+      await screen.findByText(/no information from your documents or settings/i);
+
+      await user.click(screen.getByRole('button', { name: 'Turn off' }));
+
+      expect(bridge.updateSettings).toHaveBeenCalledExactlyOnceWith({
+        automaticUpdates: false,
+        updateNoticeSeen: true,
+      });
+    });
+
+    it('has nothing to explain to a reader who has already switched automatic updates off', async () => {
+      await renderApp(
+        { ...SETTINGS, automaticUpdates: false, updateNoticeSeen: false },
+        { status: 'off' },
+      );
+
+      expect(await screen.findByRole('heading', { name: 'Updates' })).toBeInTheDocument();
+      expect(screen.getByText('Automatic updates are off.')).toBeInTheDocument();
+      expect(screen.queryByRole('status', { name: 'Update notice' })).toBeNull();
+    });
+
+    it('asks for an answer to the explanation instead of letting it be dismissed, which would leave it unread', async () => {
+      await renderApp({ ...SETTINGS, updateNoticeSeen: false }, idle);
+      await screen.findByRole('status', { name: 'Update notice' });
+
+      expect(screen.getByRole('button', { name: 'OK' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Turn off' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+    });
+
+    it('tells the reader that a downloaded update installs on close, and restarts on request', async () => {
+      const { bridge, pushUpdate, user } = await renderWithDocument(SETTINGS, idle);
+
+      pushUpdate({ status: 'ready', version: '1.2.0' });
+
+      expect(
+        await screen.findByText('MD Reader 1.2.0 is ready. It installs when you close the app.'),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Restart now' }));
+      expect(bridge.restartToUpdate).toHaveBeenCalledOnce();
+    });
+
+    it('lets the reader dismiss that notice, and shows it again for a newer version', async () => {
+      const { pushUpdate, user } = await renderWithDocument(SETTINGS, idle);
+      pushUpdate({ status: 'ready', version: '1.2.0' });
+      await user.click(await screen.findByRole('button', { name: 'Dismiss' }));
+      expect(screen.queryByText(/MD Reader 1\.2\.0 is ready/)).toBeNull();
+
+      pushUpdate({ status: 'ready', version: '1.3.0' });
+
+      expect(await screen.findByText(/MD Reader 1\.3\.0 is ready/)).toBeInTheDocument();
+    });
+
+    it('offers the download page when this copy cannot install the update itself', async () => {
+      const { bridge, pushUpdate, user } = await renderWithDocument(SETTINGS, idle);
+      const releaseUrl = 'https://github.com/abhijithkm/md-reader/releases/tag/v1.2.0';
+
+      pushUpdate({ status: 'available', version: '1.2.0', releaseUrl });
+
+      expect(await screen.findByText('MD Reader 1.2.0 is available.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Open download page' }));
+      expect(bridge.openExternal).toHaveBeenCalledExactlyOnceWith(releaseUrl);
+    });
+
+    it('keeps updates out of the way while a document is being read', async () => {
+      await renderWithDocument(SETTINGS, idle);
+
+      expect(screen.queryByRole('heading', { name: 'Updates' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Check for updates' })).toBeNull();
     });
   });
 

@@ -35,6 +35,8 @@ describe('saved settings', () => {
     expect(JSON.parse(await readFile(path.join(userDataDir, 'settings.json'), 'utf8'))).toEqual({
       theme: 'dark',
       zoom: 1.25,
+      automaticUpdates: true,
+      updateNoticeSeen: false,
     });
   });
 

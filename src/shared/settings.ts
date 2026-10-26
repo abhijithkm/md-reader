@@ -5,13 +5,27 @@ export type ThemePreference = 'system' | 'light' | 'dark';
 export interface Settings {
   theme: ThemePreference;
   zoom: number;
+  /** Look for new versions on GitHub in the background and install them when the app closes. */
+  automaticUpdates: boolean;
+  /** The one-time explanation of automatic updates has been shown, or answered. */
+  updateNoticeSeen: boolean;
 }
 
 export const THEME_PREFERENCES: readonly ThemePreference[] = ['system', 'light', 'dark'];
 
-export const DEFAULT_SETTINGS: Readonly<Settings> = { theme: 'system', zoom: DEFAULT_ZOOM };
+export const DEFAULT_SETTINGS: Readonly<Settings> = {
+  theme: 'system',
+  zoom: DEFAULT_ZOOM,
+  automaticUpdates: true,
+  updateNoticeSeen: false,
+};
 
-const PATCH_KEYS: ReadonlySet<string> = new Set(['theme', 'zoom']);
+const PATCH_KEYS: ReadonlySet<string> = new Set([
+  'theme',
+  'zoom',
+  'automaticUpdates',
+  'updateNoticeSeen',
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -25,15 +39,26 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
+}
+
 /**
  * Tolerant parser for data read from disk: anything unusable falls back to the
- * default for that field so a damaged settings file never blocks startup.
+ * default for that field so a damaged settings file never blocks startup. A file
+ * written by an older version, which lacks newer fields, gets their defaults.
  */
 export function normalizeSettings(input: unknown): Settings {
   const source = isRecord(input) ? input : {};
   return {
     theme: isTheme(source.theme) ? source.theme : DEFAULT_SETTINGS.theme,
     zoom: isFiniteNumber(source.zoom) ? clampZoom(source.zoom) : DEFAULT_SETTINGS.zoom,
+    automaticUpdates: isBoolean(source.automaticUpdates)
+      ? source.automaticUpdates
+      : DEFAULT_SETTINGS.automaticUpdates,
+    updateNoticeSeen: isBoolean(source.updateNoticeSeen)
+      ? source.updateNoticeSeen
+      : DEFAULT_SETTINGS.updateNoticeSeen,
   };
 }
 
@@ -53,6 +78,14 @@ export function parseSettingsPatch(input: unknown): Partial<Settings> | null {
   if ('zoom' in input) {
     if (!isFiniteNumber(input.zoom)) return null;
     patch.zoom = clampZoom(input.zoom);
+  }
+  if ('automaticUpdates' in input) {
+    if (!isBoolean(input.automaticUpdates)) return null;
+    patch.automaticUpdates = input.automaticUpdates;
+  }
+  if ('updateNoticeSeen' in input) {
+    if (!isBoolean(input.updateNoticeSeen)) return null;
+    patch.updateNoticeSeen = input.updateNoticeSeen;
   }
   return patch;
 }

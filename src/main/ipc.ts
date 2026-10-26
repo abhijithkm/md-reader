@@ -2,6 +2,7 @@ import type { IpcMain } from 'electron';
 import { IpcChannel, type InvokeChannel } from '../shared/ipc';
 import { parseSettingsPatch, type Settings } from '../shared/settings';
 import type { AppInfo, OpenOutcome } from '../shared/types';
+import type { UpdateState } from '../shared/updates';
 import { toSafeExternalUrl } from './external-links';
 import { isTrustedSender } from './ipc-guard';
 
@@ -19,7 +20,15 @@ export interface IpcHandlerDeps {
   };
   settings: {
     get(): Settings;
+    /** Applies the patch at once (`get` returns it from then on) and resolves once it is written. */
     update(patch: Partial<Settings>): Promise<Settings>;
+  };
+  updates: {
+    getState(): UpdateState;
+    /** Looks for a newer version now and resolves with the state once the check has finished. */
+    checkNow(): Promise<UpdateState>;
+    /** Restarts into a downloaded update; does nothing when there is none. */
+    restart(): boolean;
   };
   appInfo: AppInfo;
   trustedOrigins: readonly string[];
@@ -59,13 +68,19 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
 
     [IpcChannel.getSettings]: fromTrustedPage(() => Promise.resolve(deps.settings.get())),
 
-    [IpcChannel.updateSettings]: fromTrustedPage(async (payload) => {
-      const patch = parseSettingsPatch(payload);
-      if (patch === null) throw new Error('Invalid settings update');
-      const updated = await deps.settings.update(patch);
-      deps.onSettingsChanged?.(updated);
-      return updated;
-    }),
+    // The store applies a change at once and answers when the file has been written. The app is told
+    // now, not then: a user who switches updates off and closes the app straight away must not
+    // still get an update installed because the write was slow.
+    [IpcChannel.updateSettings]: fromTrustedPage(
+      (payload) =>
+        new Promise<Settings>((resolve) => {
+          const patch = parseSettingsPatch(payload);
+          if (patch === null) throw new Error('Invalid settings update');
+          const written = deps.settings.update(patch);
+          deps.onSettingsChanged?.(deps.settings.get());
+          resolve(written);
+        }),
+    ),
 
     [IpcChannel.openDialog]: fromTrustedPage(() => deps.controller.openFromDialog()),
 
@@ -98,6 +113,17 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
 
     [IpcChannel.closeWindow]: fromTrustedPage(() => {
       deps.closeWindow();
+      return Promise.resolve();
+    }),
+
+    // Updating takes no input from the page: which version, from where and when are decided by
+    // the main process, so there is nothing for a compromised page to forge.
+    [IpcChannel.getUpdateState]: fromTrustedPage(() => Promise.resolve(deps.updates.getState())),
+
+    [IpcChannel.checkForUpdates]: fromTrustedPage(() => deps.updates.checkNow()),
+
+    [IpcChannel.restartToUpdate]: fromTrustedPage(() => {
+      deps.updates.restart();
       return Promise.resolve();
     }),
   };

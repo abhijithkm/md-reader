@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'ele
 import { IpcChannel, type MdReaderApi } from '../shared/ipc';
 import type { Settings } from '../shared/settings';
 import type { AppInfo, OpenOutcome } from '../shared/types';
+import type { UpdateState } from '../shared/updates';
 
 function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   return ipcRenderer.invoke(channel, ...args) as Promise<T>;
@@ -56,6 +57,18 @@ const api: MdReaderApi = {
   openExternal: (url) => invoke<boolean>(IpcChannel.openExternal, url),
   openDefaultAppsSettings: () => invoke<void>(IpcChannel.openDefaultAppsSettings),
   closeWindow: () => invoke<void>(IpcChannel.closeWindow),
+  getUpdateState: () => invoke<UpdateState>(IpcChannel.getUpdateState),
+  checkForUpdates: () => invoke<UpdateState>(IpcChannel.checkForUpdates),
+  restartToUpdate: () => invoke<void>(IpcChannel.restartToUpdate),
+  onUpdateState: (listener) => {
+    const handler = (_event: IpcRendererEvent, state: UpdateState): void => {
+      listener(state);
+    };
+    ipcRenderer.on(IpcChannel.updateState, handler);
+    return () => {
+      ipcRenderer.removeListener(IpcChannel.updateState, handler);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('mdReader', api);

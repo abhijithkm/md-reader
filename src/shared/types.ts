@@ -47,4 +47,9 @@ export interface AppInfo {
   name: string;
   version: string;
   platform: string;
+  /**
+   * True when this copy installs the updates it downloads. False for the portable executable,
+   * which cannot replace itself and only reports that a newer version exists.
+   */
+  installsUpdates: boolean;
 }

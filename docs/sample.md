@@ -1,6 +1,6 @@
 # Welcome to MD Reader
 
-MD Reader opens **Markdown** files and shows them as clean, readable documents. It works offline, needs no account, and sends nothing anywhere.
+MD Reader opens **Markdown** files and shows them as clean, readable documents. It works offline, needs no account and has no telemetry. The installed app checks GitHub now and then for a newer version, and you can switch that off.
 
 > Drag a `.md` file onto the window, press <kbd>Ctrl</kbd>+<kbd>O</kbd>, or double-click one in Explorer.
 

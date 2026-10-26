@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Settings } from '../shared/settings';
 import { IpcChannel, type InvokeChannel } from '../shared/ipc';
 import type { OpenOutcome } from '../shared/types';
+import type { UpdateState } from '../shared/updates';
 import { createIpcHandlers, DEFAULT_APPS_SETTINGS_URL, type IpcHandlerDeps } from './ipc';
 
 const TRUSTED = 'app://md-reader/index.html';
@@ -9,8 +10,28 @@ const UNTRUSTED = 'https://evil.example/page';
 const canceled: OpenOutcome = { status: 'canceled' };
 
 const invokeChannels = Object.values(IpcChannel).filter(
-  (channel): channel is InvokeChannel => channel !== IpcChannel.documentOpened,
+  (channel): channel is InvokeChannel =>
+    channel !== IpcChannel.documentOpened && channel !== IpcChannel.updateState,
 );
+
+const DEFAULTS: Settings = {
+  theme: 'system',
+  zoom: 1,
+  automaticUpdates: true,
+  updateNoticeSeen: false,
+};
+
+/** Settings that apply a patch at once, as the real store does, and then report it written. */
+function createSettingsFake() {
+  let current: Settings = { ...DEFAULTS };
+  return {
+    get: vi.fn((): Settings => ({ ...current })),
+    update: vi.fn((patch: Partial<Settings>): Promise<Settings> => {
+      current = { ...current, ...patch };
+      return Promise.resolve({ ...current });
+    }),
+  };
+}
 
 function createDeps() {
   return {
@@ -22,13 +43,13 @@ function createDeps() {
       reload: vi.fn(() => Promise.resolve(canceled)),
       rendererReady: vi.fn(),
     },
-    settings: {
-      get: vi.fn((): Settings => ({ theme: 'system', zoom: 1 })),
-      update: vi.fn((patch: Partial<Settings>): Promise<Settings> =>
-        Promise.resolve({ theme: 'system', zoom: 1, ...patch }),
-      ),
+    settings: createSettingsFake(),
+    updates: {
+      getState: vi.fn((): UpdateState => ({ status: 'idle' })),
+      checkNow: vi.fn((): Promise<UpdateState> => Promise.resolve({ status: 'current' })),
+      restart: vi.fn(() => true),
     },
-    appInfo: { name: 'MD Reader', version: '1.2.3', platform: 'win32' },
+    appInfo: { name: 'MD Reader', version: '1.2.3', platform: 'win32', installsUpdates: true },
     trustedOrigins: ['app://md-reader'],
     openExternalUrl: vi.fn((_url: string) => Promise.resolve()),
     closeWindow: vi.fn(),
@@ -40,6 +61,7 @@ function everyMock(deps: ReturnType<typeof createDeps>) {
   return [
     ...Object.values(deps.controller),
     ...Object.values(deps.settings),
+    ...Object.values(deps.updates),
     deps.openExternalUrl,
     deps.closeWindow,
     deps.onSettingsChanged,
@@ -79,12 +101,13 @@ describe('createIpcHandlers', () => {
         name: 'MD Reader',
         version: '1.2.3',
         platform: 'win32',
+        installsUpdates: true,
       });
     });
 
     it('returns the stored settings', async () => {
       const handlers = createIpcHandlers(createDeps());
-      expect(await handlers[IpcChannel.getSettings](TRUSTED)).toEqual({ theme: 'system', zoom: 1 });
+      expect(await handlers[IpcChannel.getSettings](TRUSTED)).toEqual(DEFAULTS);
     });
 
     it('applies a valid update, tells the app about it and returns the result', async () => {
@@ -97,8 +120,12 @@ describe('createIpcHandlers', () => {
       });
 
       expect(deps.settings.update).toHaveBeenCalledExactlyOnceWith({ theme: 'dark', zoom: 1.25 });
-      expect(result).toEqual({ theme: 'dark', zoom: 1.25 });
-      expect(deps.onSettingsChanged).toHaveBeenCalledExactlyOnceWith({ theme: 'dark', zoom: 1.25 });
+      expect(result).toEqual({ ...DEFAULTS, theme: 'dark', zoom: 1.25 });
+      expect(deps.onSettingsChanged).toHaveBeenCalledExactlyOnceWith({
+        ...DEFAULTS,
+        theme: 'dark',
+        zoom: 1.25,
+      });
     });
 
     it('clamps an out-of-range zoom before it is stored', async () => {
@@ -107,10 +134,58 @@ describe('createIpcHandlers', () => {
       expect(deps.settings.update).toHaveBeenCalledExactlyOnceWith({ zoom: 3 });
     });
 
+    it('lets the page switch automatic updates off, and tells the app so it can stop checking', async () => {
+      const deps = createDeps();
+
+      await createIpcHandlers(deps)[IpcChannel.updateSettings](TRUSTED, {
+        automaticUpdates: false,
+        updateNoticeSeen: true,
+      });
+
+      expect(deps.settings.update).toHaveBeenCalledExactlyOnceWith({
+        automaticUpdates: false,
+        updateNoticeSeen: true,
+      });
+      expect(deps.onSettingsChanged).toHaveBeenCalledWith(
+        expect.objectContaining({ automaticUpdates: false }),
+      );
+    });
+
+    // Closing the app right after switching updates off must not still install one: the app is told
+    // as soon as the choice is in effect, not when the file that keeps it has been written.
+    it('tells the app about a change before the file has been written, and answers once it has', async () => {
+      const deps = createDeps();
+      let current: Settings = { ...DEFAULTS };
+      let finishWriting: () => void = () => undefined;
+      const settings = {
+        get: vi.fn((): Settings => ({ ...current })),
+        update: vi.fn((patch: Partial<Settings>) => {
+          current = { ...current, ...patch };
+          const written = { ...current };
+          return new Promise<Settings>((resolve) => {
+            finishWriting = () => {
+              resolve(written);
+            };
+          });
+        }),
+      };
+      const handlers = createIpcHandlers({ ...deps, settings });
+
+      const answer = handlers[IpcChannel.updateSettings](TRUSTED, { automaticUpdates: false });
+
+      expect(deps.onSettingsChanged).toHaveBeenCalledExactlyOnceWith({
+        ...DEFAULTS,
+        automaticUpdates: false,
+      });
+      finishWriting();
+      expect(await answer).toEqual({ ...DEFAULTS, automaticUpdates: false });
+    });
+
     it.each([
       ['an unknown key', { theme: 'dark', isAdmin: true }],
       ['an unknown theme', { theme: 'neon' }],
       ['a text zoom', { zoom: '2' }],
+      ['a text instead of the updates switch', { automaticUpdates: 'yes' }],
       ['null', null],
       ['a string', 'dark'],
     ])('rejects an update with %s and changes nothing', async (_label, payload) => {
@@ -190,6 +265,35 @@ describe('createIpcHandlers', () => {
       expect(
         await createIpcHandlers(deps)[IpcChannel.openExternal](TRUSTED, 'https://example.com'),
       ).toBe(false);
+    });
+  });
+
+  describe('updates', () => {
+    it('reports what updating is doing', async () => {
+      const deps = createDeps();
+      deps.updates.getState.mockReturnValue({ status: 'ready', version: '1.2.0' });
+
+      expect(await createIpcHandlers(deps)[IpcChannel.getUpdateState](TRUSTED)).toEqual({
+        status: 'ready',
+        version: '1.2.0',
+      });
+    });
+
+    it('checks for a newer version when asked and returns the result', async () => {
+      const deps = createDeps();
+
+      expect(await createIpcHandlers(deps)[IpcChannel.checkForUpdates](TRUSTED, 'ignored')).toEqual(
+        { status: 'current' },
+      );
+      expect(deps.updates.checkNow).toHaveBeenCalledOnce();
+    });
+
+    it('restarts into a downloaded update, whatever the page sends along', async () => {
+      const deps = createDeps();
+
+      await createIpcHandlers(deps)[IpcChannel.restartToUpdate](TRUSTED, 'C:\\evil\\setup.exe');
+
+      expect(deps.updates.restart).toHaveBeenCalledExactlyOnceWith();
     });
   });
 

@@ -1,4 +1,4 @@
-import { copyFile, mkdir, mkdtemp } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { Page } from 'playwright-core';
@@ -40,11 +40,29 @@ describe.runIf(enabled)('screenshots', () => {
     const sample = path.join(workspace.root, 'Welcome to MD Reader.md');
     await copyFile(path.join(process.cwd(), 'docs', 'sample.md'), sample);
 
-    // Empty state, light theme (the default for a fresh profile follows the OS; force light).
-    app = await launchApp({ userDataDir });
+    // Empty state, light theme (the default for a fresh profile follows the OS; force light). The
+    // packaged app shows its Updates section only when updating is not switched off, and the
+    // explanation of updates is marked as read so that it is not in front of the start screen.
+    // With updating on, a packaged app that stayed open long enough would look for a newer version
+    // and, finding one, download it and install it when it closed. So the first check is put a day
+    // away: taking pictures can never update the copy that takes them.
+    await writeFile(
+      path.join(userDataDir, 'settings.json'),
+      JSON.stringify({ theme: 'system', zoom: 1, automaticUpdates: true, updateNoticeSeen: true }),
+    );
+    app = await launchApp({
+      userDataDir,
+      env: { MDREADER_UPDATES: 'on', MDREADER_UPDATE_FIRST_CHECK_MS: '86400000' },
+    });
     const { page } = app;
-    await page.setViewportSize({ width: 1100, height: 720 });
+    // Tall enough for the whole start screen, including the Updates section at the bottom.
+    await page.setViewportSize({ width: 1100, height: 880 });
     await page.getByRole('heading', { name: 'Open a Markdown file' }).waitFor();
+    // Only a packaged build has one; a development build starts with updates unavailable.
+    await page
+      .getByRole('region', { name: 'Updates' })
+      .waitFor({ timeout: 5_000 })
+      .catch(() => undefined);
     if ((await page.evaluate(() => document.documentElement.dataset['theme'])) === 'dark') {
       await page.getByRole('button', { name: 'Switch to light theme' }).click();
     }

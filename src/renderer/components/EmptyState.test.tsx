@@ -38,6 +38,29 @@ describe('EmptyState', () => {
     expect(screen.queryByRole('button', { name: 'Open Default apps settings' })).toBeNull();
   });
 
+  it('shows the Updates section only when the app can update', () => {
+    const { rerender } = render(<EmptyState onOpen={vi.fn()} />);
+    expect(screen.queryByRole('heading', { name: 'Updates' })).toBeNull();
+
+    rerender(
+      <EmptyState
+        onOpen={vi.fn()}
+        updates={{
+          state: { status: 'idle' },
+          version: '1.1.0',
+          installs: true,
+          onCheck: vi.fn(),
+          onSetEnabled: vi.fn(),
+          onRestart: vi.fn(),
+          onOpenPage: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Updates' })).toBeInTheDocument();
+    expect(screen.getByText('Version 1.1.0')).toBeInTheDocument();
+  });
+
   it('lists the main keyboard shortcuts', () => {
     render(<EmptyState onOpen={vi.fn()} />);
     expect(screen.getByText('Ctrl+O')).toBeInTheDocument();

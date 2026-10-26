@@ -1,9 +1,12 @@
 import { AppLogo } from './AppLogo';
+import { UpdatesPanel, type UpdatesPanelProps } from './UpdatesPanel';
 
 export interface EmptyStateProps {
   onOpen: () => void;
   /** Omitted where the Windows Settings page does not exist. */
   onOpenDefaultApps?: () => void;
+  /** Omitted in a build that cannot update. */
+  updates?: UpdatesPanelProps;
 }
 
 const SHORTCUTS: readonly (readonly [keys: string, action: string])[] = [
@@ -14,7 +17,7 @@ const SHORTCUTS: readonly (readonly [keys: string, action: string])[] = [
   ['Ctrl+W', 'Close the window'],
 ];
 
-export function EmptyState({ onOpen, onOpenDefaultApps }: EmptyStateProps) {
+export function EmptyState({ onOpen, onOpenDefaultApps, updates }: EmptyStateProps) {
   return (
     <div className="empty-state">
       <AppLogo size={72} />
@@ -49,6 +52,8 @@ export function EmptyState({ onOpen, onOpenDefaultApps }: EmptyStateProps) {
           </button>
         </section>
       )}
+
+      {updates !== undefined && <UpdatesPanel {...updates} />}
     </div>
   );
 }
