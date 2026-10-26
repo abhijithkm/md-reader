@@ -18,6 +18,8 @@ function renderToolbar(overrides: Partial<ToolbarProps> = {}) {
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onResetZoom: vi.fn(),
+    restoreTabs: true,
+    onSetRestoreTabs: vi.fn(),
     ...overrides,
   };
   render(<Toolbar {...props} />);
@@ -34,6 +36,25 @@ describe('Toolbar', () => {
   it('shows the app name when no document is open', () => {
     renderToolbar({ fileName: undefined, filePath: undefined });
     expect(screen.getByText('MD Reader')).toBeInTheDocument();
+  });
+
+  // Documents often share a name (README.md), and the folder is what tells them apart.
+  it('names the folder that holds the document next to its name', () => {
+    renderToolbar({ filePath: 'C:\\projects\\md-reader\\README.md' });
+    expect(screen.getByText('md-reader')).toHaveAttribute(
+      'title',
+      'C:\\projects\\md-reader\\README.md',
+    );
+  });
+
+  it('finds the folder whichever way the path is written', () => {
+    renderToolbar({ filePath: 'C:/projects/notes/README.md' });
+    expect(screen.getByText('notes')).toBeInTheDocument();
+  });
+
+  it('names no folder when no document is open', () => {
+    renderToolbar({ fileName: undefined, filePath: undefined });
+    expect(document.querySelector('.toolbar-folder')).toBeNull();
   });
 
   it('opens a file', async () => {
@@ -109,6 +130,27 @@ describe('Toolbar', () => {
     it('offers the light theme while the dark one is shown', () => {
       renderToolbar({ theme: 'dark' });
       expect(screen.getByRole('button', { name: 'Switch to light theme' })).toBeInTheDocument();
+    });
+  });
+
+  describe('settings', () => {
+    it('has a gear that opens the settings menu', () => {
+      renderToolbar();
+      expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    });
+
+    it('passes on the choice to stop reopening the tabs', async () => {
+      const { props, user } = renderToolbar({ restoreTabs: true });
+
+      // A menu that is closed is out of reach of assistive technology, so the query asks for it.
+      await user.click(screen.getByRole('switch', { hidden: true }));
+
+      expect(props.onSetRestoreTabs).toHaveBeenCalledExactlyOnceWith(false);
+    });
+
+    it('shows that the tabs are not reopened when that is switched off', () => {
+      renderToolbar({ restoreTabs: false });
+      expect(screen.getByRole('switch', { hidden: true })).not.toBeChecked();
     });
   });
 

@@ -47,6 +47,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Only a development build honours a feed served from this computer; the packaged app never
+      # does. So this is where the whole update flow is tried for real: find, download, check the
+      # hash, announce, switch off. It starts the app from the repository, which needs the build above.
+      - name: Try updating against a feed on this computer
+        run: npm run test:e2e -- updates
+
       - name: Package the application
         run: npm run pack
 

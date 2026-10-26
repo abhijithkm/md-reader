@@ -5,13 +5,26 @@
 //
 //   node scripts/verify-release.mjs [release directory] [--unpacked-only]
 //
-// --unpacked-only skips the installer and the portable executable, for use after `npm run pack`.
+// --unpacked-only skips the installer, the portable executable and the update files, for use after
+// `npm run pack`.
 import { execFileSync } from 'node:child_process';
-import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  closeSync,
+  createReadStream,
+  existsSync,
+  openSync,
+  readFileSync,
+  readSync,
+  statSync,
+} from 'node:fs';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { extractFile, listPackage } from '@electron/asar';
 import { FuseState, FuseV1Options, getCurrentFuseWire } from '@electron/fuses';
+import { parse } from 'yaml';
 import { checkAsarEntries } from './lib/asar-policy.mjs';
+import { checkAppUpdateConfig, checkUpdateFile } from './lib/update-metadata.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const args = process.argv.slice(2);
@@ -20,12 +33,15 @@ const releaseDirectory = path.resolve(
   args.find((arg) => !arg.startsWith('--')) ?? path.join(root, 'release'),
 );
 
-const version = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+const manifestOfProject = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+const version = manifestOfProject.version;
 const unpacked = path.join(releaseDirectory, 'win-unpacked');
 const executable = path.join(unpacked, 'MDReader.exe');
 const archive = path.join(unpacked, 'resources', 'app.asar');
+const appUpdateFile = path.join(unpacked, 'resources', 'app-update.yml');
 const installer = path.join(releaseDirectory, `MDReader-Setup-${version}.exe`);
 const portable = path.join(releaseDirectory, `MDReader-Portable-${version}.exe`);
+const updateFile = path.join(releaseDirectory, 'latest.yml');
 
 // A truncated or empty download is far smaller than any real build of the app.
 const MINIMUM_PACKAGE_BYTES = 20 * 1024 * 1024;
@@ -81,6 +97,26 @@ function authenticodeStatus(file) {
   return powershell(`(Get-AuthenticodeSignature -LiteralPath ${quote(file)}).Status.ToString()`);
 }
 
+async function sha512Base64(file) {
+  const hash = createHash('sha512');
+  await pipeline(createReadStream(file), hash);
+  return hash.digest('base64');
+}
+
+/** A YAML file as parsed, or undefined when there is no such file. */
+function readYaml(file) {
+  return existsSync(file) ? parse(readFileSync(file, 'utf8')) : undefined;
+}
+
+/** Where updates must come from: the repository named in package.json. */
+function updateSource() {
+  const url = String(manifestOfProject.repository?.url ?? '');
+  const match = /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/.exec(url);
+  if (match === null)
+    throw new Error(`package.json has no GitHub repository (repository.url is "${url}")`);
+  return { owner: match[1], repo: match[2] };
+}
+
 const checks = [];
 const check = (name, run) => checks.push({ name, run });
 
@@ -125,6 +161,34 @@ check('packaged package.json', () => {
   if (!entries.includes(main)) throw new Error(`main "${manifest.main}" is not in the archive`);
   return `${manifest.name} ${manifest.version}, main ${main}`;
 });
+
+// electron-builder writes the update configuration and the update files while it builds the
+// installer, so a build of the unpacked app alone (`npm run pack`) has neither.
+if (!unpackedOnly) {
+  check('the app updates only from this repository', () => {
+    const source = updateSource();
+    const problems = checkAppUpdateConfig({
+      appUpdate: readYaml(appUpdateFile),
+      source,
+      updaterFolder: `${manifestOfProject.name}-updater`,
+    });
+    if (problems.length > 0) throw new Error(problems.join('; '));
+    return `github.com/${source.owner}/${source.repo}`;
+  });
+
+  check('latest.yml matches the installer and the blockmap is there', async () => {
+    const problems = checkUpdateFile({
+      version,
+      installerName: path.basename(installer),
+      installerSha512: await sha512Base64(installer),
+      installerSize: statSync(installer).size,
+      blockmapExists: existsSync(`${installer}.blockmap`),
+      metadata: readYaml(updateFile),
+    });
+    if (problems.length > 0) throw new Error(problems.join('; '));
+    return `${path.basename(updateFile)} names ${path.basename(installer)}, with its size and SHA-512`;
+  });
+}
 
 check('Electron fuses', async () => {
   const wire = await getCurrentFuseWire(executable);

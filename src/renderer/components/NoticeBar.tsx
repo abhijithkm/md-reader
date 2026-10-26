@@ -1,5 +1,5 @@
 import { CircleAlert, Info, X } from 'lucide-react';
-import type { Notice } from '../hooks/useDocument';
+import type { Notice } from '../workspace';
 
 export interface NoticeBarProps {
   notice: Notice | undefined;

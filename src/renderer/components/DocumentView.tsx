@@ -10,9 +10,9 @@ import {
 import { computeTextStats, countLines } from '../../shared/text-stats';
 import type { MarkdownDocument } from '../../shared/types';
 import { useWheelZoom } from '../hooks/useWheelZoom';
-import type { ScrollRequest } from '../hooks/useDocument';
 import { findAnchorTarget } from '../markdown/anchors';
 import { MarkdownRenderer, type LinkActions } from '../markdown/MarkdownRenderer';
+import type { ScrollRequest } from '../workspace';
 
 export interface DocumentStats {
   words: number;
@@ -29,6 +29,11 @@ export interface DocumentViewProps {
   actions: LinkActions;
   onStats: (stats: DocumentStats) => void;
   onZoomStep: (direction: 'in' | 'out') => void;
+  /**
+   * Where the reader has scrolled to, as a distance from the top, each time they scroll. The app's
+   * own positioning of a document is not the reader's doing, and is not reported.
+   */
+  onScrollTop: (top: number) => void;
 }
 
 /** Visible text of the rendered document, with a space between text runs so words never fuse. */
@@ -56,6 +61,7 @@ export function DocumentView({
   actions,
   onStats,
   onZoomStep,
+  onScrollTop,
 }: DocumentViewProps) {
   const articleRef = useRef<HTMLElement>(null);
   const token = scrollRequest.token;
@@ -104,6 +110,21 @@ export function DocumentView({
     }
     jumpTo(scroller, scrollRequest.top ?? 0);
   }, [token, scrollRequest.anchor, scrollRequest.top, settled, scrollRef]);
+
+  // Say where the reader is as they scroll, so that the tab can give the place back when they return
+  // to it. Only a reader who has acted on this document is heard: before that, the position is what
+  // the app put there, or what the last document left behind while this one was still being laid out.
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (scroller === null) return;
+    const report = (): void => {
+      if (interactedToken.current === token) onScrollTop(scroller.scrollTop);
+    };
+    scroller.addEventListener('scroll', report, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', report);
+    };
+  }, [scrollRef, token, onScrollTop]);
 
   // Count words once the whole text is on screen, without delaying the first paint.
   useEffect(() => {

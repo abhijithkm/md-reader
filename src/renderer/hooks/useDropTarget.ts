@@ -6,15 +6,15 @@ function carriesFiles(event: DragEvent): boolean {
 }
 
 /**
- * Lets the user drop a file anywhere on the window. The page must always
+ * Lets the user drop files anywhere on the window. The page must always
  * cancel dragover and drop: otherwise Chromium would navigate to the dropped
  * file and replace the app with its contents.
  */
-export function useDropTarget(onDropFile: (file: File) => void): { dragging: boolean } {
+export function useDropTarget(onDropFiles: (files: File[]) => void): { dragging: boolean } {
   const [dragging, setDragging] = useState(false);
-  const latest = useRef(onDropFile);
+  const latest = useRef(onDropFiles);
   useEffect(() => {
-    latest.current = onDropFile;
+    latest.current = onDropFiles;
   });
 
   useEffect(() => {
@@ -42,9 +42,12 @@ export function useDropTarget(onDropFile: (file: File) => void): { dragging: boo
       setDragging(false);
 
       const files = Array.from(event.dataTransfer?.files ?? []);
-      // Prefer a Markdown file; otherwise the first, so the user is told why it cannot be opened.
-      const file = files.find((candidate) => isMarkdownFileName(candidate.name)) ?? files[0];
-      if (file !== undefined) latest.current(file);
+      // Every Markdown file opens, each in a tab of its own. When there is none, the first file is
+      // handed over anyway, so that the user is told why it cannot be opened.
+      const markdown = files.filter((candidate) => isMarkdownFileName(candidate.name));
+      const [first] = files;
+      const chosen = markdown.length > 0 ? markdown : first === undefined ? [] : [first];
+      if (chosen.length > 0) latest.current(chosen);
     };
 
     window.addEventListener('dragenter', onDragEnter);

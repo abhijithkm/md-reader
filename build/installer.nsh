@@ -23,12 +23,11 @@
   WriteRegStr SHELL_CONTEXT "Software\Classes\MDReader.md\shell\open\command" "" '"$appExe" "%1"'
   WriteRegStr SHELL_CONTEXT "Software\Classes\MDReader.markdown\shell\open\command" "" '"$appExe" "%1"'
 
-  ; electron-builder keeps a copy of the installer (about 100 MB) in %LOCALAPPDATA% for its
-  ; auto-updater. This app has no updater, so remove the copy it has just made.
-  !ifdef APP_INSTALLER_STORE_FILE
-    Delete "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}"
-  !endif
-  RMDir "$LOCALAPPDATA\md-reader-updater"
+  ; electron-builder keeps a copy of the installer (about 100 MB) in %LOCALAPPDATA%\md-reader-updater.
+  ; The updater compares the next version with it, so that an update downloads only what changed
+  ; instead of the whole installer. It also keeps the last installer it downloaded in a "pending"
+  ; folder there until the next update replaces it, so the folder can hold about 200 MB. All of it
+  ; stays while the program is installed, and the uninstaller removes it.
 
   ; Settings > Apps > Default apps: capabilities registered for this user. They live under the
   ; publisher's name, and the entry in RegisteredApplications is named after it too, so that
@@ -60,8 +59,12 @@
   ${endIf}
   Pop $0
 
-  ; A copy of the installer left by an older version, which kept one.
-  RMDir /r "$LOCALAPPDATA\md-reader-updater"
+  ; The updater's folder: the copy of the installer it keeps for small downloads, and any update
+  ; that was downloaded but not installed. An upgrade runs this macro too, from inside an installer
+  ; that is itself started from that folder, so only a real uninstall removes it.
+  ${ifNot} ${isUpdated}
+    RMDir /r "$LOCALAPPDATA\md-reader-updater"
+  ${endIf}
 
   DeleteRegValue SHELL_CONTEXT "Software\RegisteredApplications" "AbhijithKM.MDReader"
   DeleteRegKey SHELL_CONTEXT "Software\AbhijithKM\MDReader"

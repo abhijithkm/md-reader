@@ -1,5 +1,16 @@
 export type ShortcutAction =
-  'open' | 'zoomIn' | 'zoomOut' | 'resetZoom' | 'close' | 'reload' | 'back';
+  | 'open'
+  | 'zoomIn'
+  | 'zoomOut'
+  | 'resetZoom'
+  | 'closeTab'
+  | 'closeWindow'
+  | 'reload'
+  | 'back'
+  | 'nextTab'
+  | 'previousTab'
+  | 'moveTabLeft'
+  | 'moveTabRight';
 
 /** The parts of a keyboard event the shortcuts depend on. */
 export interface KeyInput {
@@ -32,8 +43,9 @@ export function matchShortcut(input: KeyInput): ShortcutAction | undefined {
   switch (key.toLowerCase()) {
     case 'o':
       return shiftKey ? undefined : 'open';
+    // Ctrl+W closes the tab, as in a browser; with Shift it closes the window.
     case 'w':
-      return shiftKey ? undefined : 'close';
+      return shiftKey ? 'closeWindow' : 'closeTab';
     case 'r':
       return shiftKey ? undefined : 'reload';
     case '0':
@@ -45,6 +57,14 @@ export function matchShortcut(input: KeyInput): ShortcutAction | undefined {
     case '-':
     case '_':
       return 'zoomOut';
+    // Through the tabs, and with Shift the other way round. Page Up and Page Down do the same, and
+    // with Shift they carry the tab along instead.
+    case 'tab':
+      return shiftKey ? 'previousTab' : 'nextTab';
+    case 'pagedown':
+      return shiftKey ? 'moveTabRight' : 'nextTab';
+    case 'pageup':
+      return shiftKey ? 'moveTabLeft' : 'previousTab';
     default:
       return undefined;
   }

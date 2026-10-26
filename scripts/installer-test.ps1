@@ -11,8 +11,10 @@
     Installs -Installer. When -PreviousInstaller is given, that older installer goes in first,
     so the run upgrades over a real earlier installation. Then checks the installed files,
     shortcuts, the Apps & features entry and the file type registration (.md and .markdown,
-    the "Open with" entries and the Default apps capabilities). Writes the path of the
-    installed executable to $env:GITHUB_OUTPUT as "exe", so later steps can run it.
+    the "Open with" entries and the Default apps capabilities). Then installs once more the way
+    the app's own updater does, running the installer from the updater's folder with --updated
+    and /S, and checks that this leaves that folder alone. Writes the path of the installed
+    executable to $env:GITHUB_OUTPUT as "exe", so later steps can run it.
 
   Phase Uninstall
     Runs the installed uninstaller and checks that the program, the shortcuts and every
@@ -47,6 +49,12 @@ if (($env:CI -ne 'true') -and (-not $AllowLocal)) {
   exit 2
 }
 
+# A silent install does not start the app, but if anything here ever does, it must not look for
+# updates on the internet: an installation test must not depend on that. The setting is undone at
+# the end, so that it does not stay behind in the session that ran this.
+$previousUpdates = $env:MDREADER_UPDATES
+$env:MDREADER_UPDATES = 'off'
+
 $ProductName = 'MD Reader'
 $ExecutableName = 'MDReader.exe'
 $UninstallRoot = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
@@ -56,8 +64,10 @@ $Classes = 'HKCU:\Software\Classes'
 $PublisherKey = 'HKCU:\Software\AbhijithKM'
 $CapabilitiesKey = "$PublisherKey\MDReader\Capabilities"
 $RegisteredName = 'AbhijithKM.MDReader'
-# electron-builder puts a copy of the installer here for an updater; build/installer.nsh removes it.
+# electron-builder puts a copy of the installer here, so that an update downloads only what changed.
+# It stays while the program is installed and the uninstaller removes the folder.
 $UpdaterFolder = Join-Path $env:LOCALAPPDATA 'md-reader-updater'
+$StoredInstaller = Join-Path $UpdaterFolder 'installer.exe'
 $Failures = New-Object System.Collections.Generic.List[string]
 
 function Assert-That {
@@ -126,10 +136,10 @@ function Wait-Until([scriptblock]$Condition, [int]$TimeoutSeconds) {
   return [bool](& $Condition)
 }
 
-function Invoke-Installer([string]$Path) {
+function Invoke-Installer([string]$Path, [string[]]$Arguments = @('/S')) {
   $name = Split-Path -Leaf $Path
-  Write-Host "--- Running $name /S"
-  $process = Start-Process -FilePath (Resolve-Path -LiteralPath $Path).Path -ArgumentList '/S' -PassThru
+  Write-Host "--- Running $name $($Arguments -join ' ')"
+  $process = Start-Process -FilePath (Resolve-Path -LiteralPath $Path).Path -ArgumentList $Arguments -PassThru
   if (-not $process.WaitForExit(300000)) {
     $process.Kill()
     throw "$name did not finish within five minutes."
@@ -162,8 +172,8 @@ function Test-Installation([string]$Version) {
   $uninstaller = Get-UninstallerPath $entry
   Assert-That (Test-Path -LiteralPath $uninstaller) "the uninstaller named in Apps & features exists ($uninstaller)"
   Assert-That (Test-Path -LiteralPath (Join-Path $installDir 'resources\app.asar')) 'the application archive is in the install folder'
-  Assert-That (-not (Test-Path -LiteralPath $UpdaterFolder)) `
-    "the copy of the installer that electron-builder keeps for an updater was removed ($UpdaterFolder)"
+  Assert-That (Test-Path -LiteralPath $StoredInstaller) `
+    "the copy of the installer that updates compare with is kept ($StoredInstaller)"
 
   $shell = New-Object -ComObject WScript.Shell
   $shortcuts = @(
@@ -239,6 +249,23 @@ function Invoke-InstallPhase {
   $installDir = Test-Installation $version
   if (-not $installDir) { return }
 
+  # An installed copy updates itself by running the new installer from the folder where it saved it,
+  # with --updated and /S. The old version is uninstalled first, and that uninstall must leave the
+  # folder alone: the installer that is running sits in it. Nothing else here runs an installer from
+  # there, so this is the one place the guard in build/installer.nsh is put to the test.
+  Write-Host '--- Installing again the way an update does, from the updater folder'
+  $pending = Join-Path $UpdaterFolder 'pending'
+  New-Item -ItemType Directory -Force -Path $pending | Out-Null
+  $updateInstaller = Join-Path $pending (Split-Path -Leaf $Installer)
+  Copy-Item -LiteralPath $Installer -Destination $updateInstaller -Force
+  $updateNote = Join-Path $pending 'update-info.json'
+  Set-Content -LiteralPath $updateNote -Value '{}'
+  Invoke-Installer $updateInstaller @('--updated', '/S')
+  $installDir = Test-Installation $version
+  Assert-That (Test-Path -LiteralPath $updateNote) 'an update that runs from the updater folder leaves what the updater keeps there'
+  Assert-That (Test-Path -LiteralPath $updateInstaller) 'the installer that did the update is still where the updater put it'
+  if (-not $installDir) { return }
+
   $exe = Join-Path $installDir $ExecutableName
   Write-Host "Installed to $installDir"
   if ($env:GITHUB_OUTPUT) {
@@ -306,6 +333,12 @@ try {
   Write-Host "ERROR $($_.Exception.Message)"
   Write-Host $_.ScriptStackTrace
   $Failures.Add($_.Exception.Message)
+} finally {
+  if ($null -eq $previousUpdates) {
+    Remove-Item -LiteralPath Env:MDREADER_UPDATES -ErrorAction SilentlyContinue
+  } else {
+    $env:MDREADER_UPDATES = $previousUpdates
+  }
 }
 
 if ($Failures.Count -gt 0) {

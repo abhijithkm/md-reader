@@ -29,6 +29,24 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   });
 }
 
+// jsdom has no DragEvent. It is a mouse event that carries a data transfer, which is all that tests
+// of dragging need, and without it a drag event built by the testing library has no pointer position.
+if (typeof window !== 'undefined' && typeof window.DragEvent !== 'function') {
+  class DragEventStandIn extends MouseEvent {
+    readonly dataTransfer: DataTransfer | null;
+
+    constructor(type: string, init: DragEventInit = {}) {
+      super(type, init);
+      this.dataTransfer = init.dataTransfer ?? null;
+    }
+  }
+  Object.defineProperty(window, 'DragEvent', {
+    writable: true,
+    configurable: true,
+    value: DragEventStandIn,
+  });
+}
+
 // jsdom does not implement scrollIntoView.
 if (typeof Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
   Element.prototype.scrollIntoView = vi.fn();

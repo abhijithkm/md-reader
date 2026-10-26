@@ -1,15 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { matchShortcut } from '../shortcuts';
+import { matchShortcut, type ShortcutAction } from '../shortcuts';
 
-export interface ShortcutHandlers {
-  open: () => void;
-  zoomIn: () => void;
-  zoomOut: () => void;
-  resetZoom: () => void;
-  close: () => void;
-  reload: () => void;
-  back: () => void;
-}
+export type ShortcutHandlers = Record<ShortcutAction, () => void>;
 
 /**
  * Keyboard shortcuts for the whole window. The app has no menu bar, so the page

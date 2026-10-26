@@ -1,18 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeSettings, parseSettingsPatch } from './settings';
+import { DEFAULT_SETTINGS, normalizeSettings, parseSettingsPatch } from './settings';
+
+const DEFAULTS = {
+  theme: 'system',
+  zoom: 1,
+  automaticUpdates: true,
+  updateNoticeSeen: false,
+  restoreTabs: true,
+};
 
 describe('normalizeSettings', () => {
   it.each([undefined, null, 42, 'dark', [], true])('falls back to defaults for %j', (input) => {
-    expect(normalizeSettings(input)).toEqual({ theme: 'system', zoom: 1 });
+    expect(normalizeSettings(input)).toEqual(DEFAULTS);
   });
 
   it('keeps valid values', () => {
-    expect(normalizeSettings({ theme: 'dark', zoom: 1.5 })).toEqual({ theme: 'dark', zoom: 1.5 });
+    expect(normalizeSettings({ theme: 'dark', zoom: 1.5 })).toEqual({
+      ...DEFAULTS,
+      theme: 'dark',
+      zoom: 1.5,
+    });
   });
 
   it('replaces each invalid field independently', () => {
-    expect(normalizeSettings({ theme: 'neon', zoom: 2 })).toEqual({ theme: 'system', zoom: 2 });
-    expect(normalizeSettings({ theme: 'light', zoom: 'big' })).toEqual({ theme: 'light', zoom: 1 });
+    expect(normalizeSettings({ theme: 'neon', zoom: 2 })).toEqual({ ...DEFAULTS, zoom: 2 });
+    expect(normalizeSettings({ theme: 'light', zoom: 'big' })).toEqual({
+      ...DEFAULTS,
+      theme: 'light',
+    });
   });
 
   it('clamps zoom into the supported range', () => {
@@ -22,8 +37,8 @@ describe('normalizeSettings', () => {
 
   it('drops unknown keys', () => {
     expect(normalizeSettings({ theme: 'dark', zoom: 1, extra: '<script>' })).toEqual({
+      ...DEFAULTS,
       theme: 'dark',
-      zoom: 1,
     });
   });
 
@@ -31,6 +46,56 @@ describe('normalizeSettings', () => {
     const first = normalizeSettings(null);
     first.theme = 'dark';
     expect(normalizeSettings(null).theme).toBe('system');
+  });
+
+  describe('automatic updates', () => {
+    it('are on, and not yet explained, by default', () => {
+      expect(DEFAULT_SETTINGS.automaticUpdates).toBe(true);
+      expect(DEFAULT_SETTINGS.updateNoticeSeen).toBe(false);
+    });
+
+    it('keeps the two switches when they are valid', () => {
+      expect(normalizeSettings({ automaticUpdates: false, updateNoticeSeen: true })).toEqual({
+        ...DEFAULTS,
+        automaticUpdates: false,
+        updateNoticeSeen: true,
+      });
+    });
+
+    it('replaces a switch that is not a boolean with its default', () => {
+      expect(normalizeSettings({ automaticUpdates: 'no', updateNoticeSeen: 1 })).toEqual(DEFAULTS);
+      expect(normalizeSettings({ automaticUpdates: null, updateNoticeSeen: [] })).toEqual(DEFAULTS);
+    });
+
+    it('reads a file written by version 1.0.0, which only knew theme and zoom', () => {
+      expect(normalizeSettings({ theme: 'dark', zoom: 2 })).toEqual({
+        theme: 'dark',
+        zoom: 2,
+        automaticUpdates: true,
+        updateNoticeSeen: false,
+        restoreTabs: true,
+      });
+    });
+  });
+
+  describe('reopening the tabs', () => {
+    it('is on by default', () => {
+      expect(DEFAULT_SETTINGS.restoreTabs).toBe(true);
+    });
+
+    it('keeps the switch when it is a boolean', () => {
+      expect(normalizeSettings({ restoreTabs: false })).toEqual({
+        ...DEFAULTS,
+        restoreTabs: false,
+      });
+      expect(normalizeSettings({ restoreTabs: true })).toEqual(DEFAULTS);
+    });
+
+    it('replaces a switch that is not a boolean with its default', () => {
+      expect(normalizeSettings({ restoreTabs: 'off' })).toEqual(DEFAULTS);
+      expect(normalizeSettings({ restoreTabs: 0 })).toEqual(DEFAULTS);
+      expect(normalizeSettings({ restoreTabs: null })).toEqual(DEFAULTS);
+    });
   });
 });
 
@@ -49,6 +114,20 @@ describe('parseSettingsPatch', () => {
     expect(parseSettingsPatch({ zoom: 50 })).toEqual({ zoom: 3 });
   });
 
+  it('accepts the update switches', () => {
+    expect(parseSettingsPatch({ automaticUpdates: false })).toEqual({ automaticUpdates: false });
+    expect(parseSettingsPatch({ updateNoticeSeen: true })).toEqual({ updateNoticeSeen: true });
+    expect(parseSettingsPatch({ automaticUpdates: false, updateNoticeSeen: true })).toEqual({
+      automaticUpdates: false,
+      updateNoticeSeen: true,
+    });
+  });
+
+  it('accepts the switch for reopening the tabs', () => {
+    expect(parseSettingsPatch({ restoreTabs: false })).toEqual({ restoreTabs: false });
+    expect(parseSettingsPatch({ restoreTabs: true })).toEqual({ restoreTabs: true });
+  });
+
   it.each([
     ['a string', 'dark'],
     ['an array', [{ theme: 'dark' }]],
@@ -58,6 +137,16 @@ describe('parseSettingsPatch', () => {
     ['a NaN zoom', { zoom: Number.NaN }],
     ['an infinite zoom', { zoom: Number.POSITIVE_INFINITY }],
     ['an unknown key', { theme: 'dark', evil: 1 }],
+    ['a text instead of the updates switch', { automaticUpdates: 'yes' }],
+    ['a number instead of the updates switch', { automaticUpdates: 1 }],
+    ['a null instead of the notice switch', { updateNoticeSeen: null }],
+    ['a text instead of the notice switch', { updateNoticeSeen: 'true' }],
+    ['a text instead of the tabs switch', { restoreTabs: 'false' }],
+    ['a number instead of the tabs switch', { restoreTabs: 0 }],
+    // The list of open documents is the main process's own: the page may switch reopening on or
+    // off, and may never write a path into the settings.
+    ['a list of tabs', { restoreTabs: true, tabs: ['C:\\private\\notes.md'] }],
+    ['a list of paths', { openDocuments: ['C:\\private\\notes.md'] }],
   ])('rejects %s', (_label, input) => {
     expect(parseSettingsPatch(input)).toBeNull();
   });

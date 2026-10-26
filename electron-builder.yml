@@ -66,5 +66,11 @@ electronFuses:
   onlyLoadAppFromAsar: true
   grantFileProtocolExtraPrivileges: false
 
-# Releases are published by .github/workflows/release.yml, never by electron-builder.
-publish: null
+# Where an installed copy looks for new versions: electron-builder writes this into the package as
+# resources/app-update.yml, and writes the update file (latest.yml) next to the installer. Nothing is
+# uploaded by electron-builder: every build here runs with --publish never, and
+# .github/workflows/release.yml attaches the files to the GitHub Release.
+publish:
+  provider: github
+  owner: abhijithkm
+  repo: md-reader

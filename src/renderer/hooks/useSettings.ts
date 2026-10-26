@@ -13,6 +13,12 @@ export interface SettingsController {
   zoomIn: () => void;
   zoomOut: () => void;
   resetZoom: () => void;
+  /** Switches the background check for new versions on or off. */
+  setAutomaticUpdates: (enabled: boolean) => void;
+  /** Remembers that the one-time explanation of updates was read; `turnOff` also switches them off. */
+  dismissUpdateNotice: (turnOff: boolean) => void;
+  /** Whether the tabs that are open come back the next time the app starts. */
+  setRestoreTabs: (enabled: boolean) => void;
 }
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
@@ -99,5 +105,38 @@ export function useSettings(
     if (latest.current.zoom !== DEFAULT_ZOOM) update({ zoom: DEFAULT_ZOOM });
   }, [update]);
 
-  return { loaded, settings, resolvedTheme, toggleTheme, zoomIn, zoomOut, resetZoom };
+  const setAutomaticUpdates = useCallback(
+    (enabled: boolean): void => {
+      update({ automaticUpdates: enabled });
+    },
+    [update],
+  );
+  const dismissUpdateNotice = useCallback(
+    (turnOff: boolean): void => {
+      update(
+        turnOff ? { automaticUpdates: false, updateNoticeSeen: true } : { updateNoticeSeen: true },
+      );
+    },
+    [update],
+  );
+
+  const setRestoreTabs = useCallback(
+    (enabled: boolean): void => {
+      update({ restoreTabs: enabled });
+    },
+    [update],
+  );
+
+  return {
+    loaded,
+    settings,
+    resolvedTheme,
+    toggleTheme,
+    zoomIn,
+    zoomOut,
+    resetZoom,
+    setAutomaticUpdates,
+    dismissUpdateNotice,
+    setRestoreTabs,
+  };
 }

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import type { OpenLinkOptions } from '../../shared/tabs';
 import { MarkdownRenderer, type MarkdownRendererProps } from './MarkdownRenderer';
 
 const BASE = 'file:///C:/docs/';
@@ -8,7 +9,7 @@ const BASE = 'file:///C:/docs/';
 function renderMarkdown(source: string, overrides: Partial<MarkdownRendererProps> = {}) {
   const actions = {
     openExternal: vi.fn<(url: string) => void>(),
-    openLocal: vi.fn<(url: string) => void>(),
+    openLocal: vi.fn<(url: string, options?: OpenLinkOptions) => void>(),
   };
   const view = render(
     <MarkdownRenderer source={source} baseUrl={BASE} actions={actions} {...overrides} />,
@@ -188,6 +189,50 @@ describe('MarkdownRenderer: links', () => {
     expect(actions.openLocal).toHaveBeenCalledExactlyOnceWith(
       'file:///C:/docs/guide/setup.md#install',
     );
+  });
+
+  it('opens a local link in a tab of its own when it is clicked with Ctrl held', () => {
+    const { actions } = renderMarkdown('[setup](guide/setup.md#install)');
+
+    fireEvent.click(screen.getByRole('link', { name: 'setup' }), { ctrlKey: true });
+
+    expect(actions.openLocal).toHaveBeenCalledExactlyOnceWith(
+      'file:///C:/docs/guide/setup.md#install',
+      { newTab: true },
+    );
+  });
+
+  it('opens a local link in a tab of its own on a middle click, and never lets the page follow it', () => {
+    const { actions } = renderMarkdown('[setup](guide/setup.md)');
+    const middleClick = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 });
+
+    const notPrevented = fireEvent(screen.getByRole('link', { name: 'setup' }), middleClick);
+
+    expect(notPrevented).toBe(false);
+    expect(actions.openLocal).toHaveBeenCalledExactlyOnceWith('file:///C:/docs/guide/setup.md', {
+      newTab: true,
+    });
+  });
+
+  it('does nothing for a right-button click on a link, except keep the page from following it', () => {
+    const { actions } = renderMarkdown('[setup](guide/setup.md)');
+    const rightClick = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 2 });
+
+    const notPrevented = fireEvent(screen.getByRole('link', { name: 'setup' }), rightClick);
+
+    expect(notPrevented).toBe(false);
+    expect(actions.openLocal).not.toHaveBeenCalled();
+  });
+
+  it('opens a web link the same way whether or not Ctrl is held, and on no middle click', () => {
+    const { actions } = renderMarkdown('[site](https://example.com/a)');
+    const link = screen.getByRole('link', { name: 'site' });
+
+    fireEvent.click(link, { ctrlKey: true });
+    fireEvent(link, new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }));
+
+    expect(actions.openExternal).toHaveBeenCalledExactlyOnceWith('https://example.com/a');
+    expect(actions.openLocal).not.toHaveBeenCalled();
   });
 
   it('scrolls to the heading for in-page links', async () => {

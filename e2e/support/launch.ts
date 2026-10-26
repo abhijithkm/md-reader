@@ -17,7 +17,14 @@ export interface AppTarget {
  */
 export function resolveAppTarget(): AppTarget {
   const packaged = process.env['MDREADER_EXE'];
-  if (packaged !== undefined && packaged !== '') {
+  if (packaged !== undefined) {
+    // A workflow step that found no path leaves the variable empty. Starting the development build
+    // then would test the wrong app, and pass.
+    if (packaged === '') {
+      throw new Error(
+        'MDREADER_EXE is set but empty. Leave it unset to test the development build.',
+      );
+    }
     if (!existsSync(packaged)) throw new Error(`MDREADER_EXE does not exist: ${packaged}`);
     return { executable: packaged, baseArgs: [], kind: 'packaged' };
   }
@@ -55,7 +62,10 @@ export interface RunningApp {
   exited: Promise<number | null>;
   /** Everything the app wrote to stdout and stderr so far. */
   output(): string;
-  /** Closes the window the way a user would (Ctrl+W) and waits for the process to end. */
+  /**
+   * Closes the window the way a user would (Ctrl+Shift+W, which leaves the tabs as they are, where
+   * Ctrl+W would close the one on screen) and waits for the process to end.
+   */
   close(): Promise<void>;
   /** Ends the process immediately. */
   kill(): Promise<void>;
@@ -73,7 +83,9 @@ const START_ATTEMPTS = 3;
 const DEBUGGER_TIMEOUT_MS = 15_000;
 
 function cleanEnvironment(extra: Record<string, string> | undefined): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+  // The app looks for updates on the internet unless told not to. A test never lets it, except
+  // when it asks for a feed on this computer (see e2e/updates.e2e.test.ts).
+  const env: NodeJS.ProcessEnv = { ...process.env, MDREADER_UPDATES: 'off', ...extra };
   // This variable would make Electron behave like plain Node.js.
   delete env['ELECTRON_RUN_AS_NODE'];
   return env;
@@ -172,7 +184,7 @@ async function launchOnce(options: LaunchOptions): Promise<RunningApp> {
       output: () => chunks.join(''),
       kill,
       close: async () => {
-        await page.keyboard.press('Control+w').catch(() => undefined);
+        await page.keyboard.press('Control+Shift+W').catch(() => undefined);
         const winner = await Promise.race([
           exited,
           new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 10_000)),

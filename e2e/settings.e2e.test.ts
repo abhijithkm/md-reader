@@ -35,6 +35,9 @@ describe('saved settings', () => {
     expect(JSON.parse(await readFile(path.join(userDataDir, 'settings.json'), 'utf8'))).toEqual({
       theme: 'dark',
       zoom: 1.25,
+      automaticUpdates: true,
+      updateNoticeSeen: false,
+      restoreTabs: true,
     });
   });
 
@@ -59,6 +62,6 @@ describe('saved settings', () => {
     const background = await app.page.evaluate(
       () => getComputedStyle(document.body).backgroundColor,
     );
-    expect(background).toBe('rgb(31, 31, 31)');
+    expect(background).toBe('rgb(15, 20, 26)');
   });
 });

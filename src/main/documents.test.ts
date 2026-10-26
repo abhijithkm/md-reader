@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MarkdownDocument, OpenOutcome } from '../shared/types';
+import type { DocumentOutcome, MarkdownDocument } from '../shared/types';
 import { createDocumentService, type DocumentFileSystem } from './documents';
 
 let workDir: string;
@@ -16,14 +16,14 @@ afterEach(async () => {
   await rm(workDir, { recursive: true, force: true });
 });
 
-function expectOpened(outcome: OpenOutcome): MarkdownDocument {
+function expectOpened(outcome: DocumentOutcome): MarkdownDocument {
   if (outcome.status !== 'opened') {
     throw new Error(`expected the document to open, got ${JSON.stringify(outcome)}`);
   }
   return outcome.document;
 }
 
-function expectFailed(outcome: OpenOutcome) {
+function expectFailed(outcome: DocumentOutcome) {
   if (outcome.status !== 'failed') {
     throw new Error(`expected a failure, got ${JSON.stringify(outcome)}`);
   }

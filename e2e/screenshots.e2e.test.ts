@@ -1,10 +1,10 @@
-import { copyFile, mkdir, mkdtemp } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { Page } from 'playwright-core';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 import { createWorkspace, removeWithRetries, type Workspace } from './support/fixtures';
-import { launchApp, type RunningApp } from './support/launch';
+import { launchApp, launchSecondInstance, type RunningApp } from './support/launch';
 
 // Regenerates the screenshots used in the README from the real application:
 //   $env:MDREADER_SCREENSHOTS = '1'; npm run test:e2e -- screenshots   (PowerShell)
@@ -16,9 +16,9 @@ let workspace: Workspace;
 let userDataDir: string;
 let app: RunningApp | undefined;
 
-/** Parks the pointer on the document first, so no button is shown in its hover state. */
+/** Parks the pointer in the empty margin first, so no button is shown in its hover state. */
 async function capture(page: Page, fileName: string): Promise<void> {
-  await page.mouse.move(300, 400);
+  await page.mouse.move((page.viewportSize()?.width ?? 1100) - 40, 360);
   await page.screenshot({ path: path.join(outputDir, fileName) });
 }
 
@@ -37,14 +37,35 @@ afterEach(async () => {
 describe.runIf(enabled)('screenshots', () => {
   it('captures the empty state, a document in light and dark, and a narrow window', async () => {
     await mkdir(outputDir, { recursive: true });
-    const sample = path.join(workspace.root, 'Welcome to MD Reader.md');
+    // In a folder with a plain name, because the toolbar shows the name of the folder.
+    const folder = path.join(workspace.root, 'Documents');
+    await mkdir(folder, { recursive: true });
+    const sample = path.join(folder, 'Welcome to MD Reader.md');
     await copyFile(path.join(process.cwd(), 'docs', 'sample.md'), sample);
 
-    // Empty state, light theme (the default for a fresh profile follows the OS; force light).
-    app = await launchApp({ userDataDir });
+    // Empty state, light theme (the default for a fresh profile follows the OS; force light). The
+    // packaged app shows its Updates section only when updating is not switched off, and the
+    // explanation of updates is marked as read so that it is not in front of the start screen.
+    // With updating on, a packaged app that stayed open long enough would look for a newer version
+    // and, finding one, download it and install it when it closed. So the first check is put a day
+    // away: taking pictures can never update the copy that takes them.
+    await writeFile(
+      path.join(userDataDir, 'settings.json'),
+      JSON.stringify({ theme: 'system', zoom: 1, automaticUpdates: true, updateNoticeSeen: true }),
+    );
+    app = await launchApp({
+      userDataDir,
+      env: { MDREADER_UPDATES: 'on', MDREADER_UPDATE_FIRST_CHECK_MS: '86400000' },
+    });
     const { page } = app;
-    await page.setViewportSize({ width: 1100, height: 720 });
+    // Tall enough for the whole start screen, including the Updates section at the bottom.
+    await page.setViewportSize({ width: 1100, height: 1280 });
     await page.getByRole('heading', { name: 'Open a Markdown file' }).waitFor();
+    // Only a packaged build has one; a development build starts with updates unavailable.
+    await page
+      .getByRole('region', { name: 'Updates' })
+      .waitFor({ timeout: 5_000 })
+      .catch(() => undefined);
     if ((await page.evaluate(() => document.documentElement.dataset['theme'])) === 'dark') {
       await page.getByRole('button', { name: 'Switch to light theme' }).click();
     }
@@ -70,6 +91,27 @@ describe.runIf(enabled)('screenshots', () => {
     await app.page.getByRole('button', { name: 'Switch to light theme' }).click();
     await app.page.setViewportSize({ width: 1100, height: 1780 });
     await capture(app.page, 'document-full-light.png');
+
+    // Several documents, each in a tab of its own: the sample, and two more that a second launch adds.
+    const reading = path.join(folder, 'Reading list.md');
+    const meeting = path.join(folder, 'Meeting notes.md');
+    await writeFile(
+      reading,
+      '# Reading list\n\nThings to get to this week.\n\n- [x] The release notes\n- [ ] The design document\n- [ ] The incident review\n',
+    );
+    await writeFile(
+      meeting,
+      '# Meeting notes\n\n## Decisions\n\n1. Ship the tabs.\n2. Keep the reader a reader.\n',
+    );
+    await app.page.setViewportSize({ width: 1100, height: 720 });
+    await launchSecondInstance({ userDataDir, files: [reading] });
+    await app.page.getByRole('heading', { name: 'Reading list' }).waitFor();
+    await launchSecondInstance({ userDataDir, files: [meeting] });
+    await app.page.getByRole('heading', { name: 'Meeting notes' }).waitFor();
+    await app.page.getByRole('tab', { name: 'Welcome to MD Reader.md' }).click();
+    await app.page.getByRole('heading', { name: 'Welcome to MD Reader' }).waitFor();
+    await app.page.getByText(/\d+ words/).waitFor();
+    await capture(app.page, 'tabs-light.png');
   });
 });
 

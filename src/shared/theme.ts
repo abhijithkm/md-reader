@@ -8,8 +8,8 @@ export type ResolvedTheme = 'light' | 'dark';
  * styles/tokens.css (a test checks it).
  */
 export const WINDOW_BACKGROUND: Readonly<Record<ResolvedTheme, string>> = {
-  light: '#ffffff',
-  dark: '#1f1f1f',
+  light: '#f9fafb',
+  dark: '#0f141a',
 };
 
 /** The theme actually shown: an explicit choice wins, "system" follows the OS. */

@@ -39,6 +39,11 @@ $listener.Start()
 $port = $listener.LocalEndpoint.Port
 $listener.Stop()
 
+# The app looks for updates on the internet unless told not to, and this check must not need that.
+# The setting is undone at the end, so that it does not stay behind in the session that ran this.
+$previousUpdates = $env:MDREADER_UPDATES
+$env:MDREADER_UPDATES = 'off'
+
 # Start-Process joins the arguments with spaces without quoting them, so quote the paths here.
 $process = Start-Process -FilePath $executable -PassThru -ArgumentList @(
   ('"{0}"' -f $document),
@@ -65,6 +70,11 @@ try {
   $seconds = [math]::Round(((Get-Date) - $started).TotalSeconds, 1)
   Write-Host "PASS  the portable executable opened the document in $seconds s (window title: $title)"
 } finally {
+  if ($null -eq $previousUpdates) {
+    Remove-Item -LiteralPath Env:MDREADER_UPDATES -ErrorAction SilentlyContinue
+  } else {
+    $env:MDREADER_UPDATES = $previousUpdates
+  }
   # The portable executable starts the real app as a separate process. Stop the processes that
   # were given this run's profile folder, and no others: a developer may have their own MD Reader
   # open.

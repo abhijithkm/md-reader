@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Writes SHA256SUMS.txt for the release executables in a folder.
+// Writes SHA256SUMS.txt for the files of a release in a folder.
 //
 //   node scripts/checksums.mjs [directory] [output file]
 //
@@ -11,7 +11,10 @@ import { readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-const RELEASE_EXECUTABLE = /^MDReader-.+\.exe$/;
+// What a release carries: the installer and the portable executable, which people download, and the
+// block map and latest.yml, which installed copies read to update themselves. All four are listed, so
+// the publish job can check that none was changed on the way.
+const RELEASE_FILE = /^(?:MDReader-.+\.exe(?:\.blockmap)?|latest\.yml)$/;
 
 async function sha256(file) {
   const hash = createHash('sha256');
@@ -25,12 +28,14 @@ async function main() {
 
   const entries = await readdir(directory, { withFileTypes: true });
   const names = entries
-    .filter((entry) => entry.isFile() && RELEASE_EXECUTABLE.test(entry.name))
+    .filter((entry) => entry.isFile() && RELEASE_FILE.test(entry.name))
     .map((entry) => entry.name)
     .sort();
 
   if (names.length === 0) {
-    throw new Error(`No release executables (MDReader-*.exe) found in ${directory}`);
+    throw new Error(
+      `No release files (MDReader-*.exe, their .blockmap files and latest.yml) found in ${directory}`,
+    );
   }
 
   let listing = '';

@@ -1,9 +1,22 @@
-/* The rendered document. Sizes are in em so the whole page scales with zoom. */
+/*
+ * The rendered document. Everything is sized from --body, so the whole page scales with zoom.
+ *
+ * The one idea: Markdown's own marks hang in the margin, in a quiet warm tone (#, ##, >, ``` and ---
+ * before the things they make). The text stays clean, and the page remembers where it came from. They
+ * are drawn with CSS, so they are never selected, copied or read out.
+ */
 
 .markdown-body {
-  font-family: var(--font-ui);
-  font-size: 16px;
-  line-height: 1.7;
+  --body: 17px;
+  /* The marks are small, set in mono, and the same size whatever they sit beside. */
+  --mark-size: calc(var(--body) * 0.72);
+  --mark-gap: 14px;
+  --leading: 1.68;
+
+  font-family: var(--font-reading);
+  font-size: var(--body);
+  line-height: var(--leading);
+  font-kerning: normal;
   overflow-wrap: break-word;
 }
 
@@ -23,42 +36,123 @@
 .markdown-body h4,
 .markdown-body h5,
 .markdown-body h6 {
-  margin: 1.7em 0 0.6em;
+  --size: 1;
+  --lead: 1.25;
+
+  position: relative;
+  margin: 2em 0 0.55em;
   font-family: var(--font-display);
+  font-size: calc(var(--size) * var(--body));
   font-weight: 600;
-  line-height: 1.25;
+  line-height: var(--lead);
   scroll-margin-top: 16px;
   text-wrap: balance;
 }
 
 .markdown-body h1 {
+  --size: 2.35;
+  --lead: 1.12;
+
   margin-top: 0;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--border);
-  font-size: 2em;
+  margin-bottom: 0.6em;
+  font-weight: 600;
+  font-stretch: semi-condensed;
+  letter-spacing: -0.012em;
 }
 
 .markdown-body h2 {
-  padding-bottom: 0.25em;
-  border-bottom: 1px solid var(--border);
-  font-size: 1.5em;
+  --size: 1.55;
+  --lead: 1.2;
+
+  margin-top: 2.2em;
+  font-stretch: semi-condensed;
+  letter-spacing: -0.006em;
 }
 
 .markdown-body h3 {
-  font-size: 1.25em;
+  --size: 1.2;
+  --lead: 1.3;
+
+  margin-top: 1.9em;
 }
 
 .markdown-body h4 {
-  font-size: 1em;
+  --size: 1.02;
+  --lead: 1.4;
 }
 
 .markdown-body h5 {
-  font-size: 0.875em;
+  --size: 0.9;
+  --lead: 1.4;
+
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .markdown-body h6 {
+  --size: 0.88;
+  --lead: 1.4;
+
   color: var(--text-muted);
-  font-size: 0.85em;
+  letter-spacing: 0.02em;
+}
+
+/* ---- The marks in the margin ------------------------------------------- */
+
+.markdown-body h1::before,
+.markdown-body h2::before,
+.markdown-body h3::before,
+.markdown-body h4::before,
+.markdown-body h5::before,
+.markdown-body h6::before,
+.markdown-body blockquote::before,
+.markdown-body pre::before,
+.markdown-body hr::before {
+  position: absolute;
+  right: calc(100% + var(--mark-gap));
+  color: var(--ghost);
+  font: 500 var(--mark-size) / 1 var(--font-mono);
+  font-stretch: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: pre;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Centred on the first line of what they mark. */
+.markdown-body h1::before,
+.markdown-body h2::before,
+.markdown-body h3::before,
+.markdown-body h4::before,
+.markdown-body h5::before,
+.markdown-body h6::before {
+  top: calc((var(--size) * var(--lead) - 0.72) * var(--body) / 2);
+}
+
+/* The empty text after the slash keeps screen readers from reading the marks out. */
+.markdown-body h1::before {
+  content: '#' / '';
+}
+
+.markdown-body h2::before {
+  content: '##' / '';
+}
+
+.markdown-body h3::before {
+  content: '###' / '';
+}
+
+.markdown-body h4::before {
+  content: '####' / '';
+}
+
+.markdown-body h5::before {
+  content: '#####' / '';
+}
+
+.markdown-body h6::before {
+  content: '######' / '';
 }
 
 /* ---- Text -------------------------------------------------------------- */
@@ -71,17 +165,23 @@
 .markdown-body pre,
 .markdown-body details,
 .markdown-body .table-scroll {
-  margin: 0 0 1em;
+  margin: 0 0 1.1em;
+}
+
+.markdown-body p {
+  text-wrap: pretty;
 }
 
 .markdown-body a {
   color: var(--link);
   text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent);
   text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
+  text-underline-offset: 0.2em;
 }
 
 .markdown-body a:hover {
+  text-decoration-color: currentColor;
   text-decoration-thickness: 2px;
 }
 
@@ -92,23 +192,40 @@
 }
 
 .markdown-body mark {
-  background: color-mix(in srgb, #ffd33d 40%, transparent);
+  padding: 0 0.15em;
+  border-radius: 2px;
+  background: var(--highlight);
   color: inherit;
 }
 
 .markdown-body strong {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* ---- Lists ------------------------------------------------------------- */
 
 .markdown-body ul,
 .markdown-body ol {
-  padding-left: 2em;
+  padding-left: 1.9em;
+}
+
+/* The markers are the ones the source uses, set in the margin tone. */
+.markdown-body li::marker {
+  color: var(--ghost);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+}
+
+.markdown-body ul > li::marker {
+  content: '-  ';
+}
+
+.markdown-body ol > li::marker {
+  font-variant-numeric: tabular-nums;
 }
 
 .markdown-body li + li {
-  margin-top: 0.25em;
+  margin-top: 0.3em;
 }
 
 .markdown-body li > p {
@@ -117,12 +234,17 @@
 
 .markdown-body li > ul,
 .markdown-body li > ol {
-  margin: 0.25em 0 0;
+  margin: 0.3em 0 0;
 }
 
 .markdown-body .contains-task-list {
-  padding-left: 1.25em;
+  padding-left: 1.3em;
   list-style: none;
+}
+
+/* The box is the marker of a task, so the dash of an ordinary list item is not drawn. */
+.markdown-body .task-list-item::marker {
+  content: none;
 }
 
 /* Task list boxes are display only. Drawn by hand: a disabled native checkbox renders grey. */
@@ -130,7 +252,7 @@
   appearance: none;
   width: 1.05em;
   height: 1.05em;
-  margin: 0 0.5em 0 -1.4em;
+  margin: 0 0.55em 0 -1.45em;
   border: 1.5px solid var(--text-muted);
   border-radius: var(--radius-sm);
   vertical-align: -0.15em;
@@ -144,7 +266,7 @@
 
 .markdown-body dt {
   margin-top: 1em;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .markdown-body dd {
@@ -154,9 +276,20 @@
 /* ---- Quotes, rules, details ------------------------------------------- */
 
 .markdown-body blockquote {
-  padding: 0 1em;
-  border-left: 4px solid var(--border-strong);
+  position: relative;
+  padding: 0 0 0 1.1em;
+  border-left: 2px solid var(--border-strong);
   color: var(--text-muted);
+}
+
+.markdown-body blockquote::before {
+  content: '>' / '';
+  top: calc((var(--leading) - 0.72) * var(--body) / 2);
+}
+
+/* A quote inside a quote is shown by its own rule; a second mark would land on the first one's. */
+.markdown-body blockquote blockquote::before {
+  display: none;
 }
 
 .markdown-body blockquote > :last-child {
@@ -164,41 +297,72 @@
 }
 
 .markdown-body hr {
+  position: relative;
   height: 0;
-  margin: 2em 0;
+  margin: 2.4em 0;
+  /* The browser's own rule clips what hangs outside, and the mark does. */
+  overflow: visible;
   border: 0;
   border-top: 1px solid var(--border-strong);
 }
 
+.markdown-body hr::before {
+  content: '---' / '';
+  top: calc(var(--mark-size) / -2);
+}
+
 .markdown-body summary {
   cursor: pointer;
+  font-family: var(--font-display);
   font-weight: 600;
+}
+
+.markdown-body summary::marker {
+  color: var(--text-muted);
+}
+
+.markdown-body details[open] > summary {
+  margin-bottom: 0.6em;
 }
 
 /* ---- Code -------------------------------------------------------------- */
 
 .markdown-body code {
-  padding: 0.15em 0.35em;
+  padding: 0.12em 0.38em;
   border-radius: var(--radius-sm);
   background: var(--surface-code);
   font-family: var(--font-mono);
-  font-size: 0.875em;
+  font-size: 0.84em;
 }
 
+/*
+ * The block does not scroll itself: its code does. A box that scrolls would cut off the mark that
+ * hangs outside it.
+ */
 .markdown-body pre {
-  padding: 14px 16px;
-  overflow: auto;
+  --pad: 14px;
+
+  position: relative;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface-code);
-  font-size: 0.875em;
-  line-height: 1.5;
+  font-size: 0.86em;
+  line-height: 1.55;
   tab-size: 4;
 }
 
+.markdown-body pre::before {
+  content: '```' / '';
+  top: calc(var(--pad) + (1.55 * 0.86 * var(--body) - 0.72 * var(--body)) / 2);
+}
+
+/* The padding is the code's own, so that a scrollbar sits at the bottom edge of the block. */
 .markdown-body pre code {
-  padding: 0;
-  border-radius: 0;
+  display: block;
+  padding: var(--pad) 18px;
+  overflow-x: auto;
+  border-radius: inherit;
   background: none;
   font-size: 1em;
   white-space: pre;
@@ -210,22 +374,42 @@
   overflow-x: auto;
 }
 
-/* Cells wrap like text; the scroll container only matters when a table cannot shrink enough. */
+/* Tables are data, so they are set in the interface face and in figures of equal width. */
 .markdown-body table {
   width: 100%;
   border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 0.88em;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
 }
 
 .markdown-body th,
 .markdown-body td {
-  padding: 8px 14px;
-  border: 1px solid var(--border);
+  padding: 0.6em 0.95em;
+  border: 0;
+  border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
 
 .markdown-body th {
-  background: var(--surface-code);
+  border-bottom: 1.5px solid var(--border-strong);
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.markdown-body th:first-child,
+.markdown-body td:first-child {
+  padding-left: 0;
+}
+
+.markdown-body th:last-child,
+.markdown-body td:last-child {
+  padding-right: 0;
+}
+
+.markdown-body td code {
+  font-size: 0.92em;
 }
 
 /* ---- Images ------------------------------------------------------------ */
@@ -233,6 +417,7 @@
 .markdown-body img {
   max-width: 100%;
   height: auto;
+  border-radius: var(--radius);
 }
 
 /* Shown where a piece of the document could not be drawn, or for a document shown as plain text. */
@@ -240,10 +425,11 @@
   margin: 1em 0;
   padding: 0.6em 0.9em;
   border: 1px solid var(--danger-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--danger-bg);
   color: var(--danger-text);
-  font-size: 0.9375em;
+  font-family: var(--font-ui);
+  font-size: 0.9em;
 }
 
 .markdown-body .image-placeholder {
@@ -252,17 +438,18 @@
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  font-size: 0.875em;
+  font-family: var(--font-ui);
+  font-size: 0.85em;
 }
 
 /* ---- Footnotes --------------------------------------------------------- */
 
 .markdown-body section[data-footnotes] {
-  margin-top: 2.5em;
-  padding-top: 1em;
+  margin-top: 3em;
+  padding-top: 1.1em;
   border-top: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 0.875em;
+  font-size: 0.88em;
 }
 
 /* The "Footnotes" heading is for screen readers; the rule above labels it visually. */
@@ -276,4 +463,25 @@
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* ---- Narrow windows ---------------------------------------------------- */
+
+/* The gutter is too narrow to hold the marks, and the text needs the room. */
+@media (max-width: 720px) {
+  .markdown-body h1::before,
+  .markdown-body h2::before,
+  .markdown-body h3::before,
+  .markdown-body h4::before,
+  .markdown-body h5::before,
+  .markdown-body h6::before,
+  .markdown-body blockquote::before,
+  .markdown-body pre::before,
+  .markdown-body hr::before {
+    display: none;
+  }
+
+  .markdown-body {
+    --body: 16px;
+  }
 }

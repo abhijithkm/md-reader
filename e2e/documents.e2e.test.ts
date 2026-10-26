@@ -59,7 +59,7 @@ describe('opening documents', () => {
     expect(await page.title()).toBe('MD Reader');
   });
 
-  it('shows a file opened by a second launch in the window that is already running', async () => {
+  it('opens a file from a second launch in a tab of its own, in the window that is already running', async () => {
     const first = await workspace.write('first.md', '# First document');
     const second = await workspace.write('folder with spaces/second.md', '# Second document');
     const { page } = await openApp(first);
@@ -71,6 +71,7 @@ describe('opening documents', () => {
     await heading(page, 'Second document');
     expect(page.context().pages()).toHaveLength(1);
     expect(await page.title()).toBe('second.md — MD Reader');
+    expect(await page.getByRole('tab').allInnerTexts()).toEqual(['first.md', 'second.md']);
   });
 
   it('shows a file from a second launch when the first window was empty', async () => {
@@ -382,7 +383,7 @@ describe('hostile documents and pages', () => {
     expect(await page.getByRole('status').innerText()).toBe('110%');
   });
 
-  it('gives the page no way to name a file of its own choosing', async () => {
+  it('gives the page no way to name a file of its own choosing, other than through a link', async () => {
     // If a hostile document ever took the page over, this is all it could ask the app to do.
     const secret = await workspace.write('private/notes.md', '# private notes');
     const shown = await workspace.write('shown.md', '# shown');
@@ -391,24 +392,79 @@ describe('hostile documents and pages', () => {
 
     const result = await page.evaluate(async (secretPath) => {
       const api = (window as unknown as { mdReader: Record<string, unknown> }).mdReader;
-      const reopen = api['reopenDocument'] as (path: string) => Promise<unknown>;
-      const dropped = api['openDroppedFile'] as (file: unknown) => Promise<unknown>;
+      const getTabs = api['getTabs'] as () => Promise<{ tabs: { id: string }[] }>;
+      const reopen = api['reopenDocument'] as (tabId: string, path: string) => Promise<unknown>;
+      const reload = api['reloadDocument'] as (tabId: string) => Promise<unknown>;
+      const dropped = api['openDroppedFiles'] as (files: unknown[]) => Promise<unknown>;
+      const loadTab = api['loadTab'] as (id: string) => Promise<unknown>;
+      const activateTab = api['activateTab'] as (id: string) => Promise<unknown>;
+      const closeTab = api['closeTab'] as (id: string) => Promise<unknown>;
+      const moveTab = api['moveTab'] as (id: string, to: number) => Promise<unknown>;
+      const tabId = (await getTabs()).tabs[0]?.id ?? '';
       return {
         offersOpenPath: 'openPath' in api,
         offersPathOfFile: 'getPathForFile' in api,
         // A file that exists but that the app has not shown.
-        reopen: await reopen(secretPath),
+        reopen: await reopen(tabId, secretPath),
+        // A tab is named by an id the app issued. A path is no tab, so none of this reads or changes anything.
+        reopenInAPath: await reopen(secretPath, secretPath),
+        reloadedByPath: await reload(secretPath),
+        loadedByPath: await loadTab(secretPath),
+        otherCalls: await Promise.all([
+          activateTab(secretPath),
+          closeTab(secretPath),
+          moveTab(secretPath, 0),
+        ]),
         // A File made up by the page has no location on disk.
-        dropped: await dropped(new File(['# made up'], 'made-up.md')),
+        dropped: await dropped([new File(['# made up'], 'made-up.md')]),
       };
     }, secret);
 
     expect(result.offersOpenPath).toBe(false);
     expect(result.offersPathOfFile).toBe(false);
     expect(result.reopen).toMatchObject({ status: 'failed', error: { code: 'not-found' } });
-    expect(result.dropped).toMatchObject({ status: 'failed', error: { code: 'invalid-path' } });
-    // Nothing changed on screen.
+    expect(result.reopenInAPath).toEqual({ status: 'canceled' });
+    expect(result.reloadedByPath).toEqual({ status: 'canceled' });
+    expect(result.loadedByPath).toMatchObject({ status: 'failed', error: { code: 'not-found' } });
+    expect(result.dropped).toMatchObject([{ status: 'failed', error: { code: 'invalid-path' } }]);
+    // Nothing changed on screen, and no tab was added or taken away.
     await heading(page, 'shown');
+    expect(await page.getByRole('tab').allInnerTexts()).toEqual(['shown.md']);
+  });
+
+  it('holds a link that the page makes up to the rules for links', async () => {
+    // A link is how a page may name a file, so a link to somewhere a link may not lead is refused
+    // however the page came to ask: the network, a file that is not Markdown, anything but a file.
+    const shown = await workspace.write('shown.md', '# shown');
+    const { page } = await openApp(shown);
+    await heading(page, 'shown');
+
+    const results = await page.evaluate(async () => {
+      const api = (window as unknown as { mdReader: Record<string, unknown> }).mdReader;
+      const getTabs = api['getTabs'] as () => Promise<{ tabs: { id: string }[] }>;
+      const openLink = api['openLink'] as (url: string, options?: unknown) => Promise<unknown>;
+      const tabId = (await getTabs()).tabs[0]?.id ?? '';
+      return {
+        network: await openLink('file://mdreader-test.invalid/share/notes.md', { tabId }),
+        notMarkdown: await openLink('file:///C:/Windows/win.ini', { tabId }),
+        web: await openLink('https://example.com/notes.md', { tabId }),
+        inATabThatIsNotOpen: await openLink('file:///C:/notes.md', { tabId: 'tab-999' }),
+        inAPath: await openLink('file:///C:/notes.md', { tabId: 'C:\\notes.md' }),
+      };
+    });
+
+    expect(results.network).toMatchObject({ status: 'failed', error: { code: 'blocked-link' } });
+    expect(results.notMarkdown).toMatchObject({
+      status: 'failed',
+      error: { code: 'unsupported-type' },
+    });
+    expect(results.web).toMatchObject({ status: 'failed', error: { code: 'blocked-link' } });
+    // A tab that is not open, or that is named by something other than an id the app issued, has no
+    // link to follow: nothing is read.
+    expect(results.inATabThatIsNotOpen).toEqual({ status: 'canceled' });
+    expect(results.inAPath).toEqual({ status: 'canceled' });
+    await heading(page, 'shown');
+    expect(await page.getByRole('tab').allInnerTexts()).toEqual(['shown.md']);
   });
 });
 

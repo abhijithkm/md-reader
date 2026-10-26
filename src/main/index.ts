@@ -9,12 +9,15 @@ import {
   shell,
   type BrowserWindow,
 } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import { existsSync } from 'node:fs';
 import { lstat, readFile, readlink, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { IpcChannel } from '../shared/ipc';
 import { LOCAL_IMAGE_SCHEME } from '../shared/local-image-url';
 import type { Settings } from '../shared/settings';
 import { resolveTheme, WINDOW_BACKGROUND } from '../shared/theme';
+import type { UpdateState } from '../shared/updates';
 import { AppController } from './app-controller';
 import { APP_SCHEME, handleAppRequest } from './app-protocol';
 import { declineClientCertificates } from './certificates';
@@ -22,7 +25,12 @@ import { createDocumentService } from './documents';
 import { createIpcHandlers, registerIpcHandlers } from './ipc';
 import { handleLocalImageRequest } from './local-image-protocol';
 import { resolveRendererLocation } from './renderer-location';
+import { SessionStore } from './session-store';
 import { SettingsStore } from './settings-store';
+import { resolveUpdateEnvironment } from './update-environment';
+import { createUpdaterPort, writeTestFeedConfig } from './updater-adapter';
+import { createUpdateLog, describeForLog } from './update-log';
+import { UpdateController } from './updates';
 import { createMainWindow, createWindowPort, hardenSession } from './window';
 
 /** Must equal `appId` in electron-builder.yml so Windows groups taskbar entries correctly. */
@@ -57,6 +65,16 @@ function start(): void {
   const initialSettings = settingsStore.load();
   nativeTheme.themeSource = initialSettings.theme;
 
+  // Which documents were open in tabs, kept in the profile folder so that the next run can open
+  // them again. Only the main process writes it, and switching the setting off removes it.
+  const sessionStore = new SessionStore(path.join(app.getPath('userData'), 'session.json'), {
+    onError: (error) => {
+      console.error('[session]', error);
+    },
+  });
+  sessionStore.setEnabled(initialSettings.restoreTabs);
+  let rememberingTabs = initialSettings.restoreTabs;
+
   const { url: rendererUrl, trustedOrigins } = resolveRendererLocation({
     isPackaged: app.isPackaged,
     env: process.env,
@@ -66,26 +84,86 @@ function start(): void {
   let mainWindow: BrowserWindow | undefined;
   const windowPort = createWindowPort(() => mainWindow);
 
+  // Updates: the installed app looks for a newer version on GitHub in the background and installs
+  // it when the app closes. Whether and how is decided from the build and the environment, never
+  // from the page (see update-environment.ts).
+  const sendUpdateState = (state: UpdateState): void => {
+    if (mainWindow !== undefined && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IpcChannel.updateState, state);
+    }
+  };
+  const updateEnvironment = resolveUpdateEnvironment({
+    isPackaged: app.isPackaged,
+    env: process.env,
+  });
+  // What the updater does is written to a small file in the profile folder, because a packaged app has
+  // no console and an update that did not arrive would otherwise leave no trace of why.
+  const updateLog = createUpdateLog(path.join(app.getPath('userData'), 'update.log'));
+  const updates = new UpdateController({
+    updater:
+      updateEnvironment.kind === 'active'
+        ? createUpdaterPort(autoUpdater, {
+            logger: updateLog.library,
+            ...(updateEnvironment.requestTimeoutMs === undefined
+              ? {}
+              : { requestTimeoutMs: updateEnvironment.requestTimeoutMs }),
+            ...(updateEnvironment.testFeedUrl === undefined
+              ? {}
+              : {
+                  testFeed: {
+                    configPath: writeTestFeedConfig(
+                      app.getPath('userData'),
+                      updateEnvironment.testFeedUrl,
+                    ),
+                  },
+                }),
+          })
+        : undefined,
+    ...(updateEnvironment.kind === 'unavailable'
+      ? { unavailableReason: updateEnvironment.reason }
+      : {
+          notifyOnly: updateEnvironment.notifyOnly,
+          ...(updateEnvironment.firstCheckDelayMs === undefined
+            ? {}
+            : { firstCheckDelayMs: updateEnvironment.firstCheckDelayMs }),
+        }),
+    enabled: initialSettings.automaticUpdates,
+    onState: sendUpdateState,
+    log: (message, error) => {
+      console.error('[updates]', message, error);
+      updateLog.write(
+        'error',
+        error === undefined ? message : `${message} ${describeForLog(error)}`,
+      );
+    },
+  });
+
   const controller: AppController = new AppController({
     documents: createDocumentService(),
     getWindow: () =>
       mainWindow !== undefined && !mainWindow.isDestroyed() ? windowPort : undefined,
-    showOpenDialog: async (): Promise<string | undefined> => {
+    showOpenDialog: async (): Promise<string[]> => {
       const currentPath = controller.getCurrentDocumentPath();
       const options = {
-        title: 'Open Markdown file',
+        title: 'Open Markdown files',
         ...(currentPath === undefined ? {} : { defaultPath: path.dirname(currentPath) }),
-        properties: ['openFile' as const],
+        properties: ['openFile' as const, 'multiSelections' as const],
         filters: [{ name: 'Markdown files', extensions: ['md', 'markdown'] }],
       };
       const result =
         mainWindow === undefined
           ? await dialog.showOpenDialog(options)
           : await dialog.showOpenDialog(mainWindow, options);
-      return result.canceled ? undefined : result.filePaths[0];
+      return result.canceled ? [] : result.filePaths;
     },
     isPackaged: app.isPackaged,
+    onTabsChanged: (session) => {
+      sessionStore.save(session);
+    },
   });
+  // The tabs of the last run, shown without reading them; a file named on the command line is
+  // added after them below.
+  if (initialSettings.restoreTabs) controller.restoreSession(sessionStore.load());
 
   const applyTheme = (theme: Settings['theme']): void => {
     nativeTheme.themeSource = theme;
@@ -99,13 +177,33 @@ function start(): void {
     createIpcHandlers({
       controller,
       settings: settingsStore,
-      appInfo: { name: app.getName(), version: app.getVersion(), platform: process.platform },
+      updates: {
+        getState: () => updates.getState(),
+        checkNow: () => updates.checkNow(),
+        restart: () => updates.restartToInstall(),
+      },
+      appInfo: {
+        name: app.getName(),
+        version: app.getVersion(),
+        platform: process.platform,
+        installsUpdates: updateEnvironment.kind === 'active' && !updateEnvironment.notifyOnly,
+      },
       trustedOrigins,
       openExternalUrl: (url) => shell.openExternal(url),
       closeWindow: () => {
         mainWindow?.close();
       },
       onSettingsChanged: (settings) => {
+        // First what must not wait or be skipped: someone who turned updating off must not get an
+        // update because a change of theme went wrong.
+        updates.setEnabled(settings.automaticUpdates);
+        // The same for the tabs: switching the remembering off removes what was remembered at
+        // once, and switching it on remembers the tabs that are open now.
+        if (settings.restoreTabs !== rememberingTabs) {
+          rememberingTabs = settings.restoreTabs;
+          sessionStore.setEnabled(rememberingTabs);
+          if (rememberingTabs) sessionStore.save(controller.sessionData());
+        }
         applyTheme(settings.theme);
       },
     }),
@@ -123,13 +221,14 @@ function start(): void {
     app.quit();
   });
 
-  // Let a pending settings write finish before the process exits.
-  let flushedSettings = false;
+  // Let pending writes (the settings, the open tabs) finish before the process exits.
+  let flushedFiles = false;
   app.on('before-quit', (event) => {
-    if (flushedSettings) return;
+    updates.stop();
+    if (flushedFiles) return;
     event.preventDefault();
-    flushedSettings = true;
-    void settingsStore.flush().finally(() => {
+    flushedFiles = true;
+    void Promise.all([settingsStore.flush(), sessionStore.flush()]).finally(() => {
       app.quit();
     });
   });
@@ -174,5 +273,7 @@ function start(): void {
     mainWindow.on('closed', () => {
       mainWindow = undefined;
     });
+
+    updates.start();
   });
 }
